@@ -1,0 +1,11 @@
+# This is a sample player definition file.
+#name = "Player"
+#name = "Player"
+
+[stats]
+strength = 18
+dexterity = 14
+constitution = 15
+intelligence = 12
+wisdom = 10
+charisma = 8
