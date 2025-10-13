@@ -1,0 +1,11 @@
+# Aethelgard World Module Manifest
+
+# A list of all creature definition files to load for this world.
+creatures = [
+    #"creatures/player.toml",
+    "creatures/goblin.toml"
+]
+
+# We can add more lists here later for items, rooms, etc.
+# items = []
+# rooms = []

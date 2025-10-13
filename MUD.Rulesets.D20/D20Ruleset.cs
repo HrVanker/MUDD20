@@ -19,21 +19,39 @@ namespace MUD.Rulesets.D20
 
         public void LoadContent(World ecsWorld, string worldModulePath)
         {
-            Console.WriteLine($"Scanning for content in module: {worldModulePath}");
+            Console.WriteLine($"Loading world module from: {worldModulePath}");
 
-            if (!Directory.Exists(worldModulePath))
+            string manifestPath = Path.Combine(worldModulePath, "world.toml");
+            if (!File.Exists(manifestPath))
             {
-                Console.WriteLine($"Error: World module path not found at {worldModulePath}");
+                Console.WriteLine($"Error: World manifest not found at {manifestPath}");
                 return;
             }
 
-            // Find all .toml files in the directory and any subdirectories
-            var contentFiles = Directory.GetFiles(worldModulePath, "*.toml", SearchOption.AllDirectories);
-            Console.WriteLine($"Found {contentFiles.Length} content files to load.");
-
-            foreach (var file in contentFiles)
+            try
             {
-                LoadEntityFromFile(ecsWorld, file);
+                // 1. Read and parse the manifest file.
+                string manifestContent = File.ReadAllText(manifestPath);
+                var manifest = Toml.ToModel(manifestContent);
+
+                // 2. Get the list of creature files from the manifest.
+                if (manifest.TryGetValue("creatures", out var creatureFilesObj) && creatureFilesObj is TomlArray creatureFilesArray)
+                {
+                    Console.WriteLine($"Found {creatureFilesArray.Count} creature(s) to load from manifest.");
+                    foreach (var creatureFile in creatureFilesArray)
+                    {
+                        // Build the full path to the creature file relative to the world module's root.
+                        string relativePath = creatureFile.ToString();
+                        string fullPath = Path.Combine(worldModulePath, relativePath);
+
+                        // 3. Load each creature file specified.
+                        LoadEntityFromFile(ecsWorld, fullPath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error parsing world manifest {manifestPath}: {ex.Message}");
             }
         }
 
@@ -75,6 +93,41 @@ namespace MUD.Rulesets.D20
                     componentsAdded++;
                 }
 
+                if (tomlModel.TryGetValue("vitals", out var vitalsValue) && vitalsValue is TomlTable vitalsTable)
+                {
+                    ecsWorld.Add(entity, new VitalsComponent
+                    {
+                        MaxHP = Convert.ToInt32(vitalsTable["max_hp"]),
+                        CurrentHP = Convert.ToInt32(vitalsTable["current_hp"]),
+                        TempHP = Convert.ToInt32(vitalsTable["temp_hp"])
+                    });
+                    componentsAdded++;
+                }
+
+                // CombatStats Component
+                if (tomlModel.TryGetValue("combat", out var combatValue) && combatValue is TomlTable combatTable)
+                {
+                    ecsWorld.Add(entity, new CombatStatsComponent
+                    {
+                        ArmorClass = Convert.ToInt32(combatTable["armor_class"]),
+                        BaseAttackBonus = Convert.ToInt32(combatTable["base_attack_bonus"])
+                    });
+                    componentsAdded++;
+                }
+
+                // Skills Component
+                if (tomlModel.TryGetValue("skills", out var skillsValue) && skillsValue is TomlTable skillsTable)
+                {
+                    ecsWorld.Add(entity, new SkillsComponent
+                    {
+                        Acrobatics = Convert.ToInt32(skillsTable["acrobatics"]),
+                        Perception = Convert.ToInt32(skillsTable["perception"]),
+                        Stealth = Convert.ToInt32(skillsTable["stealth"]),
+                        Diplomacy = Convert.ToInt32(skillsTable["diplomacy"])
+                    });
+                    componentsAdded++;
+                }
+
                 // If we found any components, create an entity with them.
                 if (componentsAdded > 0)
                 {
@@ -95,6 +148,7 @@ namespace MUD.Rulesets.D20
             Console.WriteLine("D20 Ruleset is registering systems...");
             var systems = new Group<GameTime>("D20GameSystems");
             systems.Add(new CharacterSheetSystem(ecsWorld, gameState));
+            systems.Add(new SkillCheckSystem(ecsWorld, gameState));
 
             //systems.Add(new DebugNameSystem(ecsWorld, gameState));
             //systems.Add(new DebugStatsSystem(ecsWorld, gameState));

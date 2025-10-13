@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="Arch" Version="2.1.0" />
     <PackageReference Include="Arch.System" Version="1.1.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.9" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,12 +25,26 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Content\Aethelgard\classes\fighter.toml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Content\Aethelgard\creatures\goblin.toml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="Content\Aethelgard\creatures\player.toml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Content\Aethelgard\races\human.toml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Content\Aethelgard\world.toml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Content\Aethelgard\classes\" />
+    <Folder Include="Content\Aethelgard\races\" />
   </ItemGroup>
 
 </Project>

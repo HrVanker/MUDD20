@@ -1,0 +1,13 @@
+name = "Fighter"
+
+[vitals]
+max_hp = 10
+
+[combat]
+base_attack_bonus = 1
+
+[skills]
+acrobatics = 1
+perception = 2
+stealth = 0
+diplomacy = 0

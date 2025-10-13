@@ -1,6 +1,5 @@
 # This is a sample player definition file.
-#name = "Player"
-#name = "Player"
+name = "Player"
 
 [stats]
 strength = 18

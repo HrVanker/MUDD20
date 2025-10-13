@@ -1,7 +1,10 @@
-# A simple goblin creature.
+name = "Goblin Grunt"
+description = "A short, wiry humanoid with warty green skin and beady eyes."
 
-#name = "Goblin Grunt"
-#description = "A short, wiry humanoid with warty green skin and beady eyes."
+[vitals]
+max_hp = 6
+current_hp = 6
+temp_hp = 0
 
 [stats]
 strength = 11
@@ -10,3 +13,13 @@ constitution = 12
 intelligence = 10
 wisdom = 9
 charisma = 6
+
+[combat]
+armor_class = 15
+base_attack_bonus = 1
+
+[skills]
+acrobatics = 2
+perception = 4
+stealth = 8
+diplomacy = -2
