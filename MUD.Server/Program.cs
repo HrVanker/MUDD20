@@ -12,27 +12,19 @@ using System.Threading;
 
 Console.WriteLine("Server is starting up...");
 
-// Step 1: Initialize the database service.
+// Step 1: Initialize the database.
 var dbService = new DatabaseService();
 dbService.InitializeDatabase();
-
-// Ensure our test player exists in the database.
 using (var db = new GameDbContext())
 {
     if (!db.Players.Any(p => p.AccountId == 12345))
     {
-        db.Players.Add(new PlayerCharacter
-        {
-            AccountId = 12345,
-            CharacterName = "Tester",
-            Race = "human",
-            Class = "fighter"
-        });
+        db.Players.Add(new PlayerCharacter { AccountId = 12345, CharacterName = "Tester", Race = "human", Class = "fighter" });
         db.SaveChanges();
     }
 }
 
-// Step 2: Create the foundational ECS World and GameState.
+// Step 2: Create the ECS World.
 World ecsWorld = World.Create();
 GameState gameState = new GameState();
 Console.WriteLine("ECS World and GameState created.");
@@ -41,30 +33,28 @@ Console.WriteLine("ECS World and GameState created.");
 IRuleset ruleset = new D20Ruleset();
 Console.WriteLine($"Ruleset '{ruleset.Name}' has been loaded.");
 
-// Step 4: Create a login request entity.
+// Step 4: Create a login request and run the system to process it.
 Console.WriteLine("Simulating a player login request for Account ID 12345...");
 ecsWorld.Create(new PlayerLoginRequestComponent { AccountId = 12345 });
-
-// Step 5: Manually run the creation system to process the login request.
 var creationSystem = new CharacterCreationSystem(ecsWorld, dbService);
-Entity? playerEntity = creationSystem.Update(new GameTime(0)); // This will now work correctly.
+Entity? playerEntity = creationSystem.Update(new GameTime(0)); // This captures the player entity.
 
-// Step 6: Load all the other world content (NPCs, items, etc.) from the manifest.
+// Step 5: Load all other world content like NPCs.
 Console.WriteLine("Loading world content from manifest...");
 ruleset.LoadContent(ecsWorld, "Content/Aethelgard");
 
-// Step 7: Register all the systems that will run in the main game loop.
+// Step 6: Register the systems that run every tick.
 Group<GameTime> gameSystems = ruleset.RegisterSystems(ecsWorld, gameState);
 gameSystems.Initialize();
 Console.WriteLine("Ruleset initialized successfully.");
 
-// Step 8: Start the main game loop.
+// Step 7: Start the main game loop.
 Console.WriteLine("Starting main game loop...");
-bool firstTick = true; // A flag to ensure our test only runs once.
+bool firstTick = true; // A flag to ensure our test runs only once.
 
 while (true)
 {
-    // On the very first tick of the loop, create the skill check request.
+    // THE FIX: The skill check is created INSIDE the loop.
     if (firstTick && playerEntity.HasValue)
     {
         Console.WriteLine("\n--- Simulating a Perception skill check for the player... ---\n");
@@ -74,10 +64,10 @@ while (true)
             Skill = Skill.Perception,
             DifficultyClass = 15
         });
-        firstTick = false; // Set the flag so this doesn't run again.
+        firstTick = false; // Prevent this from running on every tick.
     }
 
-    // Now, the SkillCheckSystem will find and process the request.
+    // The game systems (including SkillCheckSystem) are updated here.
     gameSystems.Update(new GameTime(0.1f));
-    Thread.Sleep(500); // Slowed down to make the output easy to read
+    Thread.Sleep(500);
 }
