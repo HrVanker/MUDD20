@@ -1,4 +1,6 @@
-﻿namespace MUD.Rulesets.D20.Components
+﻿using Arch.Core;
+
+namespace MUD.Rulesets.D20.Components
 {
     /// <summary>
     /// Stores the health and other resource pools for an entity.
@@ -30,5 +32,28 @@
         public int Perception { get; set; }
         public int Stealth { get; set; }
         public int Diplomacy { get; set; }
+    }
+
+    /// <summary>
+    /// A component added to an entity when it enters combat.
+    /// Stores its initiative roll and current status.
+    /// </summary>
+    public struct InCombatComponent
+    {
+        public int Initiative;
+        // We could add status effects here later (e.g., Stunned, Prone)
+    }
+
+    /// <summary>
+    /// A "singleton" component, where only one exists in the world.
+    /// It tracks the overall state of the current combat encounter.
+    /// </summary>
+    public struct CombatTurnComponent
+    {
+        // A list of all entities in combat, sorted by initiative.
+        public List<Entity> TurnOrder;
+
+        // The index in the TurnOrder list of the entity whose turn it currently is.
+        public int CurrentTurnIndex;
     }
 }

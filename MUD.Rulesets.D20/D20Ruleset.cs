@@ -1,21 +1,28 @@
 ﻿using Arch.Core;
 using Arch.System;
-using MUD.Core;
+using MUD.Core; // <-- FIX: Added missing using directive for IDiceRoller
 using MUD.Rulesets.D20.Components;
 using MUD.Rulesets.D20.GameSystems;
 using System;
-using System.Collections.Generic; // Needed for List
+using System.Collections.Generic;
 using System.IO;
 using Tomlyn;
 using Tomlyn.Model;
 
 namespace MUD.Rulesets.D20
 {
-
-
     public class D20Ruleset : IRuleset
     {
         public string Name => "D20 Ruleset";
+        private readonly Random _random = new Random();
+
+        // A simple implementation of the dice roller for the live game.
+        private class RandomDiceRoller : IDiceRoller
+        {
+            private readonly Random _random;
+            public RandomDiceRoller(Random random) => _random = random;
+            public int Roll(int sides) => _random.Next(1, sides + 1);
+        }
 
         public void LoadContent(World ecsWorld, string worldModulePath)
         {
@@ -30,24 +37,34 @@ namespace MUD.Rulesets.D20
 
             try
             {
-                // 1. Read and parse the manifest file.
                 string manifestContent = File.ReadAllText(manifestPath);
                 var manifest = Toml.ToModel(manifestContent);
 
-                // 2. Get the list of creature files from the manifest.
+                // Load Creatures
                 if (manifest.TryGetValue("creatures", out var creatureFilesObj) && creatureFilesObj is TomlArray creatureFilesArray)
                 {
                     Console.WriteLine($"Found {creatureFilesArray.Count} creature(s) to load from manifest.");
                     foreach (var creatureFile in creatureFilesArray)
                     {
-                        // Build the full path to the creature file relative to the world module's root.
-                        string relativePath = creatureFile.ToString();
-                        string fullPath = Path.Combine(worldModulePath, relativePath);
-
-                        // 3. Load each creature file specified.
+                        if (creatureFile == null) continue;
+                        string fullPath = Path.Combine(worldModulePath, creatureFile.ToString());
                         LoadEntityFromFile(ecsWorld, fullPath);
                     }
                 }
+
+                // --- NEW CODE ---
+                // Load Items
+                if (manifest.TryGetValue("items", out var itemFilesObj) && itemFilesObj is TomlArray itemFilesArray)
+                {
+                    Console.WriteLine($"Found {itemFilesArray.Count} item(s) to load from manifest.");
+                    foreach (var itemFile in itemFilesArray)
+                    {
+                        if (itemFile == null) continue;
+                        string fullPath = Path.Combine(worldModulePath, itemFile.ToString());
+                        LoadEntityFromFile(ecsWorld, fullPath);
+                    }
+                }
+                // --- END NEW CODE ---
             }
             catch (Exception ex)
             {
@@ -61,21 +78,44 @@ namespace MUD.Rulesets.D20
             {
                 string fileContent = File.ReadAllText(filePath);
                 var tomlModel = Toml.ToModel(fileContent);
-
-                // 1. Create an empty entity first.
                 var entity = ecsWorld.Create();
+                ecsWorld.Add(entity, new LocationComponent { RoomId = 0, X = 0, Y = 0 });
                 int componentsAdded = 0;
 
-                // 2. Add components to the entity one by one.
+                // Standard components like Name and Description
                 if (tomlModel.TryGetValue("name", out var nameValue))
                 {
                     ecsWorld.Add(entity, new NameComponent { Name = nameValue.ToString() });
                     componentsAdded++;
                 }
-
                 if (tomlModel.TryGetValue("description", out var descValue))
                 {
                     ecsWorld.Add(entity, new DescriptionComponent { Description = descValue.ToString() });
+                    componentsAdded++;
+                }
+
+                // --- NEW ITEM PARSING LOGIC ---
+                // If it has an [item] table, it's an item.
+                if (tomlModel.ContainsKey("item"))
+                {
+                    ecsWorld.Add(entity, new ItemComponent());
+                    componentsAdded++;
+                }
+
+                if (tomlModel.ContainsKey("inventory"))
+                {
+                    ecsWorld.Add(entity, new InventoryComponent { Items = new List<Entity>() });
+                    componentsAdded++;
+                }
+
+                // If it has a [weapon] table, add weapon data.
+                if (tomlModel.TryGetValue("weapon", out var weaponValue) && weaponValue is TomlTable weaponTable)
+                {
+                    ecsWorld.Add(entity, new WeaponComponent
+                    {
+                        DamageDice = Convert.ToInt32(weaponTable["damage_dice"]),
+                        DamageSides = Convert.ToInt32(weaponTable["damage_sides"])
+                    });
                     componentsAdded++;
                 }
 
@@ -145,15 +185,16 @@ namespace MUD.Rulesets.D20
 
         public Group<GameTime> RegisterSystems(World ecsWorld, GameState gameState)
         {
+            var diceRoller = new RandomDiceRoller(_random);
             Console.WriteLine("D20 Ruleset is registering systems...");
             var systems = new Group<GameTime>("D20GameSystems");
-            systems.Add(new CharacterSheetSystem(ecsWorld, gameState));
-            systems.Add(new SkillCheckSystem(ecsWorld, gameState));
 
-            //systems.Add(new DebugNameSystem(ecsWorld, gameState));
-            //systems.Add(new DebugStatsSystem(ecsWorld, gameState));
+            //systems.Add(new CharacterSheetSystem(ecsWorld, gameState));
+            systems.Add(new SkillCheckSystem(ecsWorld, gameState, diceRoller));
+            systems.Add(new InitiativeSystem(ecsWorld, gameState));
+            systems.Add(new CombatSystem(ecsWorld, gameState, diceRoller));
+
             return systems;
-
         }
     }
 }

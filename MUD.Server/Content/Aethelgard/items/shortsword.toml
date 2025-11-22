@@ -1,0 +1,10 @@
+name = "Shortsword"
+description = "A simple, well-balanced blade, perfect for a quick strike."
+
+# This section tags the entity as an item.
+[item]
+
+# This section defines its weapon properties.
+[weapon]
+damage_dice = 1
+damage_sides = 6

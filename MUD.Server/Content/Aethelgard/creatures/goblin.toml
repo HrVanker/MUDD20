@@ -23,3 +23,5 @@ acrobatics = 2
 perception = 4
 stealth = 8
 diplomacy = -2
+
+[inventory]

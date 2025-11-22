@@ -30,9 +30,13 @@ namespace MUD.Rulesets.D20.GameSystems
             {
                 Console.WriteLine($"Processing login for Account ID: {request.AccountId}...");
                 var savedPlayer = _dbService.GetPlayerRecord(request.AccountId);
-                if (savedPlayer == null) { /* ... error handling ... */ entitiesToDestroy.Add(entity); return; }
+                if (savedPlayer == null)
+                {
+                    Console.WriteLine($"Error: No player record found for Account ID {request.AccountId}.");
+                    entitiesToDestroy.Add(entity);
+                    return;
+                }
 
-                // 1. Load all necessary templates
                 var baseTemplate = LoadTemplate($"Content/Aethelgard/creatures/player.toml");
                 var raceTemplate = LoadTemplate($"Content/Aethelgard/races/{savedPlayer.Race}.toml");
                 var classTemplate = LoadTemplate($"Content/Aethelgard/classes/{savedPlayer.Class}.toml");
@@ -44,12 +48,13 @@ namespace MUD.Rulesets.D20.GameSystems
                     return;
                 }
 
-                // 2. Create the entity and add components by merging templates
-                var playerEntity = _world.Create(new NameComponent { Name = savedPlayer.CharacterName });
+                var playerEntity = _world.Create();
+                _world.Add(playerEntity, new NameComponent { Name = savedPlayer.CharacterName });
+                _world.Add(playerEntity, new InventoryComponent { Items = new List<Entity>() });
+                _world.Add(playerEntity, new EquipmentComponent());
+                _world.Add(playerEntity, new LocationComponent { RoomId = 0, X = 0, Y = 0 });
 
-                // Start with base stats from the player template
                 var stats = ParseComponent<CoreStatsComponent>(baseTemplate, "stats");
-                // Apply racial modifiers
                 var raceMods = (TomlTable)raceTemplate["stat_modifiers"];
                 stats.Strength += Convert.ToInt32(raceMods["strength"]);
                 stats.Dexterity += Convert.ToInt32(raceMods["dexterity"]);
@@ -59,16 +64,22 @@ namespace MUD.Rulesets.D20.GameSystems
                 stats.Charisma += Convert.ToInt32(raceMods["charisma"]);
                 _world.Add(playerEntity, stats);
 
-                // Get Vitals and Combat stats from the class template
                 _world.Add(playerEntity, ParseComponent<VitalsComponent>(classTemplate, "vitals"));
                 _world.Add(playerEntity, ParseComponent<CombatStatsComponent>(classTemplate, "combat"));
                 _world.Add(playerEntity, ParseComponent<SkillsComponent>(classTemplate, "skills"));
 
                 Console.WriteLine($"Successfully created a {savedPlayer.Race} {savedPlayer.Class} named '{savedPlayer.CharacterName}'.");
+
+                // --- THE FIX ---
+                // This line captures the created entity so we can return it.
+                createdEntity = playerEntity;
+                // --- END FIX ---
+
                 entitiesToDestroy.Add(entity);
             });
 
             foreach (var entity in entitiesToDestroy) { _world.Destroy(entity); }
+
             return createdEntity;
         }
 

@@ -36,7 +36,7 @@ namespace MUD.Server
             Console.WriteLine("Database is ready.");
         }
 
-        public IPlayerRecord GetPlayerRecord(ulong accountId)
+        public IPlayerRecord? GetPlayerRecord(ulong accountId)
         {
             using (var db = new GameDbContext())
             {

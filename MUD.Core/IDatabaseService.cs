@@ -15,6 +15,6 @@
     // method to get a player record.
     public interface IDatabaseService
     {
-        IPlayerRecord GetPlayerRecord(ulong accountId);
+        IPlayerRecord? GetPlayerRecord(ulong accountId);
     }
 }

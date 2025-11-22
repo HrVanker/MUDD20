@@ -7,5 +7,7 @@ creatures = [
 ]
 
 # We can add more lists here later for items, rooms, etc.
-# items = []
+items = [
+    "items/shortsword.toml"
+]
 # rooms = []

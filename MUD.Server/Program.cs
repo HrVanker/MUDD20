@@ -37,7 +37,7 @@ Console.WriteLine($"Ruleset '{ruleset.Name}' has been loaded.");
 Console.WriteLine("Simulating a player login request for Account ID 12345...");
 ecsWorld.Create(new PlayerLoginRequestComponent { AccountId = 12345 });
 var creationSystem = new CharacterCreationSystem(ecsWorld, dbService);
-Entity? playerEntity = creationSystem.Update(new GameTime(0)); // This captures the player entity.
+creationSystem.Update(new GameTime(0));
 
 // Step 5: Load all other world content like NPCs.
 Console.WriteLine("Loading world content from manifest...");
@@ -50,24 +50,9 @@ Console.WriteLine("Ruleset initialized successfully.");
 
 // Step 7: Start the main game loop.
 Console.WriteLine("Starting main game loop...");
-bool firstTick = true; // A flag to ensure our test runs only once.
-
 while (true)
 {
-    // THE FIX: The skill check is created INSIDE the loop.
-    if (firstTick && playerEntity.HasValue)
-    {
-        Console.WriteLine("\n--- Simulating a Perception skill check for the player... ---\n");
-        ecsWorld.Create(new SkillCheckRequestComponent
-        {
-            Performer = playerEntity.Value,
-            Skill = Skill.Perception,
-            DifficultyClass = 15
-        });
-        firstTick = false; // Prevent this from running on every tick.
-    }
-
-    // The game systems (including SkillCheckSystem) are updated here.
+    // The loop is now clean and only runs the game systems.
     gameSystems.Update(new GameTime(0.1f));
-    Thread.Sleep(500);
+    Thread.Sleep(100);
 }

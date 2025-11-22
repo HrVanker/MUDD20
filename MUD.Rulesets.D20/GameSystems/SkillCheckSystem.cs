@@ -10,11 +10,12 @@ namespace MUD.Rulesets.D20.GameSystems
     public class SkillCheckSystem : ISystem<GameTime>
     {
         private readonly World _world;
-        private readonly Random _random = new Random();
+        private readonly IDiceRoller _diceRoller;
 
-        public SkillCheckSystem(World world, GameState gameState)
+        public SkillCheckSystem(World world, GameState gameState, IDiceRoller diceRoller)
         {
             _world = world;
+            _diceRoller = diceRoller;
         }
 
         public void Update(in GameTime gameTime)
@@ -24,24 +25,25 @@ namespace MUD.Rulesets.D20.GameSystems
 
             _world.Query(in query, (Entity entity, ref SkillCheckRequestComponent request) =>
             {
-                // Make sure the performing entity is still valid.
                 if (!_world.IsAlive(request.Performer))
                 {
                     entitiesToDestroy.Add(entity);
                     return;
                 }
 
-                // Get the performer's components.
+                // --- ALL LOGIC MUST BE INSIDE THIS LAMBDA ---
+
                 var performerName = _world.Get<NameComponent>(request.Performer).Name;
                 var performerStats = _world.Get<CoreStatsComponent>(request.Performer);
                 var performerSkills = _world.Get<SkillsComponent>(request.Performer);
 
                 // 1. Roll the d20.
-                int diceRoll = _random.Next(1, 21);
+                int diceRoll = _diceRoller.Roll(20);
 
-                // 2. Get the skill rank and ability modifier.
-                int skillRank = GetSkillRank(performerSkills, request.Skill);
-                int abilityModifier = GetAbilityModifier(performerStats, request.Skill);
+                // 2. Get skill rank and ability modifier using the D20Rules helper class.
+                int skillRank = D20Rules.GetSkillRank(performerSkills, request.Skill);
+                int abilityScore = D20Rules.GetGoverningAbilityScore(request.Skill, performerStats);
+                int abilityModifier = D20Rules.GetAbilityModifier(abilityScore);
 
                 // 3. Calculate the total result.
                 int totalResult = diceRoll + skillRank + abilityModifier;
@@ -63,33 +65,6 @@ namespace MUD.Rulesets.D20.GameSystems
             });
 
             foreach (var entity in entitiesToDestroy) { _world.Destroy(entity); }
-        }
-
-        // A helper method to get the correct skill rank from the component.
-        private int GetSkillRank(in SkillsComponent skills, Skill skill)
-        {
-            return skill switch
-            {
-                Skill.Acrobatics => skills.Acrobatics,
-                Skill.Perception => skills.Perception,
-                Skill.Stealth => skills.Stealth,
-                Skill.Diplomacy => skills.Diplomacy,
-                _ => 0,
-            };
-        }
-
-        // A helper method to calculate the D20 ability score modifier.
-        private int GetAbilityModifier(in CoreStatsComponent stats, Skill skill)
-        {
-            int score = skill switch
-            {
-                Skill.Acrobatics => stats.Dexterity,
-                Skill.Stealth => stats.Dexterity,
-                Skill.Perception => stats.Wisdom,
-                Skill.Diplomacy => stats.Charisma,
-                _ => 10,
-            };
-            return (score - 10) / 2; // This is the standard D20 formula.
         }
 
         public void Initialize() { }

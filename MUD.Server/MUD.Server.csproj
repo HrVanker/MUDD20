@@ -34,6 +34,9 @@
     <None Update="Content\Aethelgard\creatures\player.toml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Content\Aethelgard\items\shortsword.toml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Content\Aethelgard\races\human.toml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -44,6 +47,7 @@
 
   <ItemGroup>
     <Folder Include="Content\Aethelgard\classes\" />
+    <Folder Include="Content\Aethelgard\items\" />
     <Folder Include="Content\Aethelgard\races\" />
   </ItemGroup>
 
