@@ -1,4 +1,5 @@
 ﻿using Arch.Core;
+using MUD.Telnet.Commands;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,11 +21,12 @@ public class CommandParser
         // Initialize our commands.
         _commands = new Dictionary<string, ICommand>
         {
+            { "move", new MoveCommand() },
+            { "m", new MoveCommand() },
             { "look", new LookCommand() },
             { "l", new LookCommand() },
             { "inventory", new InventoryCommand() },
             { "i", new InventoryCommand() },
-            // --- ADD THESE TWO LINES ---
             { "get", new GetCommand() },
             { "take", new GetCommand() },
             { "equip", new EquipCommand() },
