@@ -1,0 +1,21 @@
+# A simple test area
+
+[[rooms]]
+id = 100
+title = "Village Square"
+description = "A dusty square with a fountain in the center."
+width = 20   # Tactical Map Width (Squares)
+height = 20  # Tactical Map Height (Squares)
+
+[rooms.exits]
+north = 101
+
+[[rooms]]
+id = 101
+title = "General Store"
+description = "Shelves line the walls of this cramped shop."
+width = 8    # Smaller room
+height = 6   # Smaller room
+
+[rooms.exits]
+south = 100

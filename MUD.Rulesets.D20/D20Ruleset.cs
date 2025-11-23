@@ -64,6 +64,17 @@ namespace MUD.Rulesets.D20
                         LoadEntityFromFile(ecsWorld, fullPath);
                     }
                 }
+
+                if (manifest.TryGetValue("areas", out var areaFilesObj) && areaFilesObj is TomlArray areaFilesArray)
+                {
+                    Console.WriteLine($"Found {areaFilesArray.Count} area(s) to load from manifest.");
+                    foreach (var areaFile in areaFilesArray)
+                    {
+                        if (areaFile == null) continue;
+                        string fullPath = Path.Combine(worldModulePath, areaFile.ToString());
+                        LoadAreaFromFile(ecsWorld, fullPath);
+                    }
+                }
                 // --- END NEW CODE ---
             }
             catch (Exception ex)
@@ -183,6 +194,53 @@ namespace MUD.Rulesets.D20
             }
         }
 
+        private void LoadAreaFromFile(World ecsWorld, string filePath)
+        {
+            try
+            {
+                string fileContent = File.ReadAllText(filePath);
+                var tomlModel = Toml.ToModel(fileContent);
+
+                if (tomlModel.TryGetValue("rooms", out var roomsObj) && roomsObj is TomlArray roomsArray)
+                {
+                    foreach (TomlTable roomTable in roomsArray)
+                    {
+                        var entity = ecsWorld.Create();
+
+                        var roomComp = new RoomComponent
+                        {
+                            Title = roomTable["title"].ToString(),
+                            Description = roomTable["description"].ToString(),
+                            AreaId = Convert.ToInt32(roomTable["id"]),
+                            Exits = new Dictionary<string, int>(),
+
+                            // --- NEW: Parse Dimensions with defaults ---
+                            // If "width" is missing, default to 10
+                            Width = roomTable.ContainsKey("width") ? Convert.ToInt32(roomTable["width"]) : 10,
+                            // If "height" is missing, default to 10
+                            Height = roomTable.ContainsKey("height") ? Convert.ToInt32(roomTable["height"]) : 10
+                        };
+
+                        if (roomTable.TryGetValue("exits", out var exitsObj) && exitsObj is TomlTable exitsTable)
+                        {
+                            foreach (var exit in exitsTable)
+                            {
+                                roomComp.Exits[exit.Key] = Convert.ToInt32(exit.Value);
+                            }
+                        }
+
+                        ecsWorld.Add(entity, roomComp);
+                        ecsWorld.Add(entity, new LocationComponent { RoomId = roomComp.AreaId });
+                    }
+                    Console.WriteLine($"Loaded rooms from {Path.GetFileName(filePath)}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading area {filePath}: {ex.Message}");
+            }
+        }
+
         public Group<GameTime> RegisterSystems(World ecsWorld, GameState gameState)
         {
             var diceRoller = new RandomDiceRoller(_random);
@@ -190,6 +248,7 @@ namespace MUD.Rulesets.D20
             var systems = new Group<GameTime>("D20GameSystems");
 
             //systems.Add(new CharacterSheetSystem(ecsWorld, gameState));
+            systems.Add(new MovementSystem(ecsWorld));
             systems.Add(new SkillCheckSystem(ecsWorld, gameState, diceRoller));
             systems.Add(new InitiativeSystem(ecsWorld, gameState));
             systems.Add(new CombatSystem(ecsWorld, gameState, diceRoller));
