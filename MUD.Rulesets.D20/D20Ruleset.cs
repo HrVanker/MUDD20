@@ -1,6 +1,6 @@
 ﻿using Arch.Core;
 using Arch.System;
-using MUD.Core; // <-- FIX: Added missing using directive for IDiceRoller
+using MUD.Core;
 using MUD.Rulesets.D20.Components;
 using MUD.Rulesets.D20.GameSystems;
 using System;
@@ -16,7 +16,9 @@ namespace MUD.Rulesets.D20
         public string Name => "D20 Ruleset";
         private readonly Random _random = new Random();
 
-        // A simple implementation of the dice roller for the live game.
+        // The Registry: Maps "goblin_grunt" -> "Content/Aethelgard/creatures/goblin.toml"
+        private readonly Dictionary<string, string> _templateRegistry = new Dictionary<string, string>();
+
         private class RandomDiceRoller : IDiceRoller
         {
             private readonly Random _random;
@@ -24,76 +26,106 @@ namespace MUD.Rulesets.D20
             public int Roll(int sides) => _random.Next(1, sides + 1);
         }
 
+        private void RegisterTemplate(string filePath)
+        {
+            try
+            {
+                var content = File.ReadAllText(filePath);
+                var model = Toml.ToModel(content);
+
+                if (model.TryGetValue("id", out var idObj))
+                {
+                    string id = idObj.ToString();
+                    if (_templateRegistry.ContainsKey(id))
+                    {
+                        Console.WriteLine($"Warning: Duplicate template ID '{id}' in {Path.GetFileName(filePath)}. Overwriting.");
+                    }
+                    _templateRegistry[id] = filePath;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to register template {Path.GetFileName(filePath)}: {ex.Message}");
+            }
+        }
+
         public void LoadContent(World ecsWorld, string worldModulePath)
         {
             Console.WriteLine($"Loading world module from: {worldModulePath}");
-
             string manifestPath = Path.Combine(worldModulePath, "world.toml");
+
             if (!File.Exists(manifestPath))
             {
-                Console.WriteLine($"Error: World manifest not found at {manifestPath}");
+                Console.WriteLine($"CRITICAL: World manifest not found at {manifestPath}");
                 return;
             }
 
             try
             {
-                string manifestContent = File.ReadAllText(manifestPath);
-                var manifest = Toml.ToModel(manifestContent);
+                var manifest = Toml.ToModel(File.ReadAllText(manifestPath));
 
-                // Load Creatures
-                if (manifest.TryGetValue("creatures", out var creatureFilesObj) && creatureFilesObj is TomlArray creatureFilesArray)
+                // 1. SCAN CONTENT DIRECTORIES
+                if (manifest.TryGetValue("content_directories", out var contentDirsObj) && contentDirsObj is TomlArray contentDirs)
                 {
-                    Console.WriteLine($"Found {creatureFilesArray.Count} creature(s) to load from manifest.");
-                    foreach (var creatureFile in creatureFilesArray)
+                    foreach (var dirName in contentDirs)
                     {
-                        if (creatureFile == null) continue;
-                        string fullPath = Path.Combine(worldModulePath, creatureFile.ToString());
-                        LoadEntityFromFile(ecsWorld, fullPath);
+                        string dirPath = Path.Combine(worldModulePath, dirName.ToString());
+                        if (Directory.Exists(dirPath))
+                        {
+                            string[] files = Directory.GetFiles(dirPath, "*.toml", SearchOption.AllDirectories);
+                            Console.WriteLine($"Scanning {dirName}: Found {files.Length} templates.");
+
+                            foreach (string file in files)
+                            {
+                                RegisterTemplate(file);
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Warning: Content directory not found: {dirPath}");
+                        }
                     }
                 }
 
-                // --- NEW CODE ---
-                // Load Items
-                if (manifest.TryGetValue("items", out var itemFilesObj) && itemFilesObj is TomlArray itemFilesArray)
+                // 2. LOAD AREAS
+                if (manifest.TryGetValue("area_directories", out var areaDirsObj) && areaDirsObj is TomlArray areaDirs)
                 {
-                    Console.WriteLine($"Found {itemFilesArray.Count} item(s) to load from manifest.");
-                    foreach (var itemFile in itemFilesArray)
+                    foreach (var dirName in areaDirs)
                     {
-                        if (itemFile == null) continue;
-                        string fullPath = Path.Combine(worldModulePath, itemFile.ToString());
-                        LoadEntityFromFile(ecsWorld, fullPath);
-                    }
-                }
+                        string dirPath = Path.Combine(worldModulePath, dirName.ToString());
+                        if (Directory.Exists(dirPath))
+                        {
+                            string[] files = Directory.GetFiles(dirPath, "*.toml", SearchOption.AllDirectories);
+                            Console.WriteLine($"Loading Areas from {dirName}: Found {files.Length} files.");
 
-                if (manifest.TryGetValue("areas", out var areaFilesObj) && areaFilesObj is TomlArray areaFilesArray)
-                {
-                    Console.WriteLine($"Found {areaFilesArray.Count} area(s) to load from manifest.");
-                    foreach (var areaFile in areaFilesArray)
-                    {
-                        if (areaFile == null) continue;
-                        string fullPath = Path.Combine(worldModulePath, areaFile.ToString());
-                        LoadAreaFromFile(ecsWorld, fullPath);
+                            foreach (string file in files)
+                            {
+                                LoadAreaFromFile(ecsWorld, file);
+                            }
+                        }
                     }
                 }
-                // --- END NEW CODE ---
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error parsing world manifest {manifestPath}: {ex.Message}");
+                Console.WriteLine($"Error reading world manifest: {ex.Message}");
             }
         }
 
-        private void LoadEntityFromFile(World ecsWorld, string filePath)
+        // FIX: Added arguments (roomId, x, y) to the signature so they can be used inside.
+        private void LoadEntityFromFile(World ecsWorld, string filePath, int roomId, int x, int y)
         {
             try
             {
                 string fileContent = File.ReadAllText(filePath);
                 var tomlModel = Toml.ToModel(fileContent);
                 var entity = ecsWorld.Create();
-                ecsWorld.Add(entity, new LocationComponent { RoomId = 0, X = 0, Y = 0 });
+
+                // Now using the passed arguments
+                ecsWorld.Add(entity, new LocationComponent { RoomId = roomId, X = x, Y = y });
+
                 int componentsAdded = 0;
 
-                // Standard components like Name and Description
                 if (tomlModel.TryGetValue("name", out var nameValue))
                 {
                     ecsWorld.Add(entity, new NameComponent { Name = nameValue.ToString() });
@@ -105,8 +137,6 @@ namespace MUD.Rulesets.D20
                     componentsAdded++;
                 }
 
-                // --- NEW ITEM PARSING LOGIC ---
-                // If it has an [item] table, it's an item.
                 if (tomlModel.ContainsKey("item"))
                 {
                     ecsWorld.Add(entity, new ItemComponent());
@@ -119,7 +149,6 @@ namespace MUD.Rulesets.D20
                     componentsAdded++;
                 }
 
-                // If it has a [weapon] table, add weapon data.
                 if (tomlModel.TryGetValue("weapon", out var weaponValue) && weaponValue is TomlTable weaponTable)
                 {
                     ecsWorld.Add(entity, new WeaponComponent
@@ -155,7 +184,6 @@ namespace MUD.Rulesets.D20
                     componentsAdded++;
                 }
 
-                // CombatStats Component
                 if (tomlModel.TryGetValue("combat", out var combatValue) && combatValue is TomlTable combatTable)
                 {
                     ecsWorld.Add(entity, new CombatStatsComponent
@@ -166,7 +194,6 @@ namespace MUD.Rulesets.D20
                     componentsAdded++;
                 }
 
-                // Skills Component
                 if (tomlModel.TryGetValue("skills", out var skillsValue) && skillsValue is TomlTable skillsTable)
                 {
                     ecsWorld.Add(entity, new SkillsComponent
@@ -179,18 +206,30 @@ namespace MUD.Rulesets.D20
                     componentsAdded++;
                 }
 
-                // If we found any components, create an entity with them.
                 if (componentsAdded > 0)
                 {
                     Console.WriteLine($"Successfully created entity from {Path.GetFileName(filePath)}.");
                 }
                 else
-                { ecsWorld.Destroy(entity);
+                {
+                    ecsWorld.Destroy(entity);
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error loading entity from {filePath}: {ex.Message}");
+            }
+        }
+
+        private void SpawnEntity(World ecsWorld, string templateId, int roomId, int x, int y)
+        {
+            if (_templateRegistry.TryGetValue(templateId, out string filePath))
+            {
+                LoadEntityFromFile(ecsWorld, filePath, roomId, x, y);
+            }
+            else
+            {
+                Console.WriteLine($"Error: Room {roomId} tried to spawn unknown template '{templateId}'");
             }
         }
 
@@ -201,26 +240,28 @@ namespace MUD.Rulesets.D20
                 string fileContent = File.ReadAllText(filePath);
                 var tomlModel = Toml.ToModel(fileContent);
 
-                if (tomlModel.TryGetValue("rooms", out var roomsObj) && roomsObj is TomlArray roomsArray)
+                // FIX: Check for 'TomlTableArray' instead of 'TomlArray'
+                // [[rooms]] in TOML creates a TomlTableArray, not a generic TomlArray.
+                if (tomlModel.TryGetValue("rooms", out var roomsObj) && roomsObj is TomlTableArray roomsArray)
                 {
+                    Console.WriteLine($"  - Parsing {roomsArray.Count} rooms from {Path.GetFileName(filePath)}...");
+
                     foreach (TomlTable roomTable in roomsArray)
                     {
                         var entity = ecsWorld.Create();
+                        int roomId = Convert.ToInt32(roomTable["id"]);
 
                         var roomComp = new RoomComponent
                         {
                             Title = roomTable["title"].ToString(),
                             Description = roomTable["description"].ToString(),
-                            AreaId = Convert.ToInt32(roomTable["id"]),
+                            AreaId = roomId,
                             Exits = new Dictionary<string, int>(),
-
-                            // --- NEW: Parse Dimensions with defaults ---
-                            // If "width" is missing, default to 10
                             Width = roomTable.ContainsKey("width") ? Convert.ToInt32(roomTable["width"]) : 10,
-                            // If "height" is missing, default to 10
                             Height = roomTable.ContainsKey("height") ? Convert.ToInt32(roomTable["height"]) : 10
                         };
 
+                        // Parse Exits
                         if (roomTable.TryGetValue("exits", out var exitsObj) && exitsObj is TomlTable exitsTable)
                         {
                             foreach (var exit in exitsTable)
@@ -229,10 +270,28 @@ namespace MUD.Rulesets.D20
                             }
                         }
 
+                        // --- SPAWN LOGIC ---
+                        // Note: 'spawns' is usually a nested [[rooms.spawns]] which is ALSO a TomlTableArray
+                        if (roomTable.TryGetValue("spawns", out var spawnsObj) && spawnsObj is TomlTableArray spawnsArray)
+                        {
+                            foreach (TomlTable spawn in spawnsArray)
+                            {
+                                string templateId = spawn["template"].ToString();
+                                int x = spawn.ContainsKey("x") ? Convert.ToInt32(spawn["x"]) : 0;
+                                int y = spawn.ContainsKey("y") ? Convert.ToInt32(spawn["y"]) : 0;
+
+                                SpawnEntity(ecsWorld, templateId, roomId, x, y);
+                            }
+                        }
+
                         ecsWorld.Add(entity, roomComp);
-                        ecsWorld.Add(entity, new LocationComponent { RoomId = roomComp.AreaId });
+                        ecsWorld.Add(entity, new LocationComponent { RoomId = roomId });
                     }
-                    Console.WriteLine($"Loaded rooms from {Path.GetFileName(filePath)}");
+                    Console.WriteLine($"Successfully loaded area: {Path.GetFileName(filePath)}");
+                }
+                else
+                {
+                    Console.WriteLine($"Warning: '{filePath}' was loaded but contained no '[[rooms]]' block.");
                 }
             }
             catch (Exception ex)
@@ -247,7 +306,6 @@ namespace MUD.Rulesets.D20
             Console.WriteLine("D20 Ruleset is registering systems...");
             var systems = new Group<GameTime>("D20GameSystems");
 
-            //systems.Add(new CharacterSheetSystem(ecsWorld, gameState));
             systems.Add(new MovementSystem(ecsWorld));
             systems.Add(new SkillCheckSystem(ecsWorld, gameState, diceRoller));
             systems.Add(new InitiativeSystem(ecsWorld, gameState));

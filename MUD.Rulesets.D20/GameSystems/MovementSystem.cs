@@ -18,62 +18,83 @@ namespace MUD.Rulesets.D20.GameSystems
 
         public void Update(in GameTime gameTime)
         {
-            // Query for entities that want to move
             var query = new QueryDescription().WithAll<LocationComponent, MoveToRequestComponent>();
 
             _world.Query(in query, (Entity entity, ref LocationComponent loc, ref MoveToRequestComponent request) =>
             {
-                // 1. Get the room dimensions (assuming we can find the room entity by ID)
-                // For MVP, we will look up the Room Entity based on the Player's RoomID
                 var roomEntity = GetRoomEntity(loc.RoomId);
                 if (roomEntity == Entity.Null) return;
 
                 var room = _world.Get<RoomComponent>(roomEntity);
 
-                // 2. Define Start and Target
+                // 1. Check for Exit / Zone Transition
+                // If the target is outside bounds, we check if that direction has an exit.
+                string exitDirection = null;
+
+                if (request.TargetY < 0) exitDirection = "north";
+                else if (request.TargetY >= room.Height) exitDirection = "south";
+                else if (request.TargetX < 0) exitDirection = "west";
+                else if (request.TargetX >= room.Width) exitDirection = "east";
+
+                if (exitDirection != null)
+                {
+                    if (room.Exits.TryGetValue(exitDirection, out int targetRoomId))
+                    {
+                        // TRANSITION!
+                        Console.WriteLine($"Transitioning {exitDirection} to Room {targetRoomId}...");
+
+                        // Get dimensions of the NEW room to calculate entry point
+                        var targetRoomEntity = GetRoomEntity(targetRoomId);
+                        if (targetRoomEntity != Entity.Null)
+                        {
+                            var targetRoom = _world.Get<RoomComponent>(targetRoomEntity);
+
+                            // Update Room ID
+                            loc.RoomId = targetRoomId;
+
+                            // Calculate new coordinates (entering from opposite side)
+                            if (exitDirection == "north") { loc.X = Math.Clamp(loc.X, 0, targetRoom.Width - 1); loc.Y = targetRoom.Height - 1; }
+                            else if (exitDirection == "south") { loc.X = Math.Clamp(loc.X, 0, targetRoom.Width - 1); loc.Y = 0; }
+                            else if (exitDirection == "east") { loc.X = 0; loc.Y = Math.Clamp(loc.Y, 0, targetRoom.Height - 1); }
+                            else if (exitDirection == "west") { loc.X = targetRoom.Width - 1; loc.Y = Math.Clamp(loc.Y, 0, targetRoom.Height - 1); }
+
+                            // Clear request and return so we don't try to pathfind in the old room
+                            _world.Remove<MoveToRequestComponent>(entity);
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Blocked: No exit in that direction.");
+                        // Clamp target to edge so they walk up to the wall but stop
+                        request.TargetX = Math.Clamp(request.TargetX, 0, room.Width - 1);
+                        request.TargetY = Math.Clamp(request.TargetY, 0, room.Height - 1);
+                    }
+                }
+
+                // 2. Standard Pathfinding (Same as before)
                 var start = new Point(loc.X, loc.Y);
                 Point target = new Point(request.TargetX, request.TargetY);
 
-                // 3. Calculate Path
                 var path = Pathfinder.FindPath(start, target, room.Width, room.Height);
 
                 if (path != null && path.Any())
                 {
-                    // 4. Determine how far we can travel
-                    // Default to 6 squares (30ft) if no stats. 
                     int speed = 6;
-                    if (_world.Has<CoreStatsComponent>(entity))
-                    {
-                        // Could grab actual Speed stat here later
-                    }
+                    if (_world.Has<CoreStatsComponent>(entity)) { /* speed logic */ }
 
-                    // Take only as many steps as our speed allows
                     var stepsToTake = path.Take(speed).ToList();
                     var finalStep = stepsToTake.Last();
 
-                    // 5. Update Location
                     loc.X = finalStep.X;
                     loc.Y = finalStep.Y;
 
-                    Console.WriteLine($"Entity moved {stepsToTake.Count} steps to {finalStep}.");
-
-                    // 6. Check if we reached the destination or just moved closer
                     if (finalStep.X == target.X && finalStep.Y == target.Y)
                     {
-                        Console.WriteLine("Target reached.");
-                        // If this was a "Take" command, we could trigger an interaction here
+                        // We reached the target spot
                     }
-                    else
-                    {
-                        Console.WriteLine("Movement ran out before reaching destination.");
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("No path found to target!");
                 }
 
-                // Request complete
                 _world.Remove<MoveToRequestComponent>(entity);
             });
         }

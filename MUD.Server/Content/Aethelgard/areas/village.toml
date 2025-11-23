@@ -1,21 +1,35 @@
-# A simple test area
-
 [[rooms]]
 id = 100
 title = "Village Square"
-description = "A dusty square with a fountain in the center."
-width = 20   # Tactical Map Width (Squares)
-height = 20  # Tactical Map Height (Squares)
+description = "A dusty square with a cracked stone fountain in the center. The cobblestones are worn smooth by generations of travelers."
+width = 20   # 20x20 squares (100ft x 100ft)
+height = 20
 
 [rooms.exits]
 north = 101
 
+# --- SPAWNS FOR ROOM 100 ---
+
+# 1. Spawn a Goblin at (10, 5)
+[[rooms.spawns]]
+template = "goblin_grunt"
+x = 10
+y = 5
+
+# 2. Spawn a Sword at (12, 12)
+[[rooms.spawns]]
+template = "shortsword"
+x = 12
+y = 12
+
+
+# --- ROOM 101: A Connected Room ---
 [[rooms]]
 id = 101
 title = "General Store"
-description = "Shelves line the walls of this cramped shop."
-width = 8    # Smaller room
-height = 6   # Smaller room
+description = "Shelves line the walls of this cramped shop, smelling faintly of sawdust and dried herbs."
+width = 8
+height = 6
 
 [rooms.exits]
 south = 100

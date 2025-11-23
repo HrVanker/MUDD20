@@ -52,7 +52,7 @@ namespace MUD.Rulesets.D20.GameSystems
                 _world.Add(playerEntity, new NameComponent { Name = savedPlayer.CharacterName });
                 _world.Add(playerEntity, new InventoryComponent { Items = new List<Entity>() });
                 _world.Add(playerEntity, new EquipmentComponent());
-                _world.Add(playerEntity, new LocationComponent { RoomId = 0, X = 0, Y = 0 });
+                _world.Add(playerEntity, new LocationComponent { RoomId = 100, X = 0, Y = 0 });
 
                 var stats = ParseComponent<CoreStatsComponent>(baseTemplate, "stats");
                 var raceMods = (TomlTable)raceTemplate["stat_modifiers"];

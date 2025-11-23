@@ -1,15 +1,16 @@
-# Aethelgard World Module Manifest
+name = "Aethelgard"
+version = "0.1"
 
-# A list of all creature definition files to load for this world.
-creatures = [
-    #"creatures/player.toml",
-    "creatures/goblin.toml"
+# The engine will recursively scan these folders for .toml files
+# and register them based on the 'id' found inside the file.
+content_directories = [
+    "creatures",
+    "items",
+    "classes",
+    "races"
 ]
 
-# We can add more lists here later for items, rooms, etc.
-items = [
-    "items/shortsword.toml"
-]
-areas = [
-    "areas/village.toml"
+# Areas are handled slightly differently (loaded immediately to spawn the world)
+area_directories = [
+    "areas"
 ]
