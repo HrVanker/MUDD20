@@ -21,6 +21,8 @@ public class CommandParser
         // Initialize our commands.
         _commands = new Dictionary<string, ICommand>
         {
+            { "attack", new Attack() },
+            { "a", new Attack() },
             { "move", new MoveCommand() },
             { "m", new MoveCommand() },
             { "look", new LookCommand() },

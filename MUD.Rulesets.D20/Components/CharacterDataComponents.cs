@@ -55,5 +55,7 @@ namespace MUD.Rulesets.D20.Components
 
         // The index in the TurnOrder list of the entity whose turn it currently is.
         public int CurrentTurnIndex;
+
+        public int RoundNumber;
     }
 }

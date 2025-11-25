@@ -4,6 +4,7 @@ using MUD.Core;
 using MUD.Rulesets.D20.Components;
 using System;
 using System.Linq;
+using System.Collections.Generic;
 
 namespace MUD.Rulesets.D20.GameSystems
 {
@@ -18,6 +19,27 @@ namespace MUD.Rulesets.D20.GameSystems
             _diceRoller = diceRoller;
         }
 
+        // Helper to send a message to a specific entity if they have a client attached
+        private void SendMessage(Entity entity, string message)
+        {
+            if (_world.Has<OutputMessageComponent>(entity))
+            {
+                var output = _world.Get<OutputMessageComponent>(entity);
+                output.Messages.Add(message);
+            }
+            // Also log to console for server admin
+            Console.WriteLine($"[Combat] {message}");
+        }
+
+        // Helper to broadcast to everyone in the fight
+        private void Broadcast(CombatTurnComponent combat, string message)
+        {
+            foreach (var participant in combat.TurnOrder)
+            {
+                if (_world.IsAlive(participant))
+                    SendMessage(participant, message);
+            }
+        }
 
         public void Update(in GameTime gameTime)
         {
@@ -29,7 +51,7 @@ namespace MUD.Rulesets.D20.GameSystems
 
             ref var combat = ref _world.Get<CombatTurnComponent>(combatEntity);
 
-            // --- NEW LOGIC: Check for end of combat ---
+            // Check for end of combat
             var livingCombatants = combat.TurnOrder.Where(e => _world.IsAlive(e)).ToList();
             if (livingCombatants.Count <= 1)
             {
@@ -37,20 +59,16 @@ namespace MUD.Rulesets.D20.GameSystems
                 if (winner != Entity.Null)
                 {
                     var winnerName = _world.Get<NameComponent>(winner).Name;
-                    Console.WriteLine($"\n--- COMBAT OVER! {winnerName} is victorious! ---");
-                    // Remove the InCombat component from the winner
+                    Broadcast(combat, $"\n--- COMBAT OVER! {winnerName} is victorious! ---");
                     _world.Remove<InCombatComponent>(winner);
                 }
                 else
                 {
-                    Console.WriteLine("\n--- COMBAT OVER! All combatants were defeated. ---");
+                    Broadcast(combat, "\n--- COMBAT OVER! All combatants were defeated. ---");
                 }
-
-                // Destroy the combat state entity to end the combat loop
                 _world.Destroy(combatEntity);
                 return;
             }
-            // --- END NEW LOGIC ---
 
             var attackerEntity = combat.TurnOrder[combat.CurrentTurnIndex];
 
@@ -60,16 +78,21 @@ namespace MUD.Rulesets.D20.GameSystems
                 return;
             }
 
-            var attackerName = _world.Get<NameComponent>(attackerEntity).Name;
-            Console.WriteLine($"\n--- {attackerName}'s Turn ---");
-
-            if (!_world.Has<AttackActionComponent>(attackerEntity))
+            // Auto-queue attack for simple AI (anyone without a client connection)
+            if (!_world.Has<OutputMessageComponent>(attackerEntity) && !_world.Has<AttackActionComponent>(attackerEntity))
             {
                 var target = combat.TurnOrder.FirstOrDefault(e => e != attackerEntity && _world.IsAlive(e));
                 if (target != Entity.Null)
                 {
                     _world.Add(attackerEntity, new AttackActionComponent { Target = target });
                 }
+            }
+
+            // If it's a player's turn and they haven't acted, wait.
+            if (_world.Has<OutputMessageComponent>(attackerEntity) && !_world.Has<AttackActionComponent>(attackerEntity))
+            {
+                // Optional: Send a prompt "It is your turn!" once per round logic could go here
+                return;
             }
 
             if (_world.Has<AttackActionComponent>(attackerEntity))
@@ -85,10 +108,9 @@ namespace MUD.Rulesets.D20.GameSystems
             var action = _world.Get<AttackActionComponent>(attacker);
             var target = action.Target;
 
-            // Ensure the target is still alive and in combat.
             if (!_world.IsAlive(target) || !_world.Has<InCombatComponent>(target))
             {
-                Console.WriteLine("  Target is invalid or has fled!");
+                SendMessage(attacker, "Target is invalid or has fled!");
                 _world.Remove<AttackActionComponent>(attacker);
                 return;
             }
@@ -102,34 +124,37 @@ namespace MUD.Rulesets.D20.GameSystems
             int attackRoll = _diceRoller.Roll(20);
             int totalAttack = attackRoll + attackerCombatStats.BaseAttackBonus;
 
-            Console.WriteLine($"  {attackerName} attacks {targetName}!");
-            Console.WriteLine($"  Attack Roll: {attackRoll} + BAB({attackerCombatStats.BaseAttackBonus}) = {totalAttack} vs AC {targetCombatStats.ArmorClass}");
-
             // 2. Compare to Armor Class
             if (totalAttack >= targetCombatStats.ArmorClass)
             {
-                Console.WriteLine("  It's a HIT!");
-                // 3. Calculate and Apply Damage
-                int damage = _diceRoller.Roll(20); // Simulate a 1d6 weapon for now
+                int damage = _diceRoller.Roll(6);
                 ref var targetVitals = ref _world.Get<VitalsComponent>(target);
                 targetVitals.CurrentHP -= damage;
 
-                Console.WriteLine($"  {targetName} takes {damage} damage, leaving them at {targetVitals.CurrentHP} HP.");
+                Broadcast(combat, $"{attackerName} hits {targetName} for {damage} damage!");
 
-                // 4. Handle Entity Death
                 if (targetVitals.CurrentHP <= 0)
                 {
-                    Console.WriteLine($"  {targetName} has been defeated!");
-                    _world.Remove<InCombatComponent>(target); // Remove from combat
-                    _world.Destroy(target); // Remove from the world entirely
+                    Broadcast(combat, $"{targetName} has been defeated!");
+
+                    // Handle Player Death (Don't destroy, just remove from combat)
+                    if (_world.Has<OutputMessageComponent>(target))
+                    {
+                        Broadcast(combat, $"{targetName} falls unconscious!");
+                        _world.Remove<InCombatComponent>(target);
+                    }
+                    else
+                    {
+                        _world.Remove<InCombatComponent>(target);
+                        _world.Destroy(target);
+                    }
                 }
             }
             else
             {
-                Console.WriteLine("  It's a MISS!");
+                Broadcast(combat, $"{attackerName} attacks {targetName} and misses.");
             }
 
-            // Remove the action component now that it has been processed.
             _world.Remove<AttackActionComponent>(attacker);
         }
 
@@ -138,8 +163,8 @@ namespace MUD.Rulesets.D20.GameSystems
             combat.CurrentTurnIndex++;
             if (combat.CurrentTurnIndex >= combat.TurnOrder.Count)
             {
-                combat.CurrentTurnIndex = 0; // Loop back to the start of the order.
-                Console.WriteLine("--- Next Round ---");
+                combat.CurrentTurnIndex = 0;
+                Broadcast(combat, "--- Next Round ---");
             }
         }
 
@@ -148,5 +173,4 @@ namespace MUD.Rulesets.D20.GameSystems
         public void AfterUpdate(in GameTime t) { }
         public void Dispose() { }
     }
-
 }

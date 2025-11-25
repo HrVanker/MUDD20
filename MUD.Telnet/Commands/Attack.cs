@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic; // Needed for List<>
 using System.Threading.Tasks;
 using Arch.Core;
 using MUD.Core;
@@ -23,17 +24,20 @@ namespace MUD.Telnet.Commands
 
             string targetName = args[0];
 
-            // 1. Find Target in Room
+            // 1. Find the target in the same room
             Entity targetEntity = Entity.Null;
-            var playerLoc = world.Get<LocationComponent>(player);
+            var playerLocation = world.Get<LocationComponent>(player);
 
+            // Note: We include VitalsComponent to ensure we only attack living things
             var query = new QueryDescription().WithAll<NameComponent, LocationComponent, VitalsComponent>();
-            world.Query(in query, (Entity e, ref NameComponent name, ref LocationComponent loc) =>
+
+            world.Query(in query, (Entity entity, ref NameComponent name, ref LocationComponent loc) =>
             {
-                if (e != player && loc.RoomId == playerLoc.RoomId &&
+                if (entity != player &&
+                    loc.RoomId == playerLocation.RoomId &&
                     name.Name.Contains(targetName, StringComparison.OrdinalIgnoreCase))
                 {
-                    targetEntity = e;
+                    targetEntity = entity;
                 }
             });
 
@@ -43,10 +47,10 @@ namespace MUD.Telnet.Commands
                 return;
             }
 
-            // 2. Check if already fighting
+            // 2. Check if already in combat
             if (world.Has<InCombatComponent>(player))
             {
-                // If already in combat, this queues an attack for YOUR turn
+                // If already in combat, queue a specific attack action for this turn
                 if (world.Has<AttackActionComponent>(player))
                     world.Remove<AttackActionComponent>(player);
 
@@ -55,9 +59,14 @@ namespace MUD.Telnet.Commands
             }
             else
             {
-                // 3. Start New Combat
-                world.Add(player, new StartCombatRequestComponent { Target = targetEntity });
-                await session.WriteLineAsync($"You lunge at the {targetName}! Rolling initiative...");
+                // 3. Start Combat (FIXED)
+                // Your system expects a List<Entity> containing all participants.
+                var combatants = new List<Entity> { player, targetEntity };
+
+                // Attach the request with the correct list
+                world.Add(player, new StartCombatRequestComponent { Combatants = combatants });
+
+                await session.WriteLineAsync($"You prepare to attack the {targetName}! Rolling initiative...");
             }
         }
     }

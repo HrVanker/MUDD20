@@ -22,7 +22,9 @@ namespace MUD.Rulesets.D20.GameSystems
         {
             // Find any requests to start combat.
             var requestQuery = new QueryDescription().WithAll<StartCombatRequestComponent>();
-            var entitiesToDestroy = new List<Entity>();
+
+            // FIX 1: Rename list to 'requestsHandled' to be clear we aren't destroying entities
+            var requestsHandled = new List<Entity>();
 
             _world.Query(in requestQuery, (Entity entity, ref StartCombatRequestComponent request) =>
             {
@@ -30,7 +32,7 @@ namespace MUD.Rulesets.D20.GameSystems
                 var combatStateQuery = new QueryDescription().WithAll<CombatTurnComponent>();
                 if (_world.CountEntities(in combatStateQuery) > 0)
                 {
-                    entitiesToDestroy.Add(entity);
+                    requestsHandled.Add(entity);
                     return;
                 }
 
@@ -41,19 +43,43 @@ namespace MUD.Rulesets.D20.GameSystems
                 {
                     if (!_world.IsAlive(combatantEntity)) continue;
 
-                    var stats = _world.Get<CoreStatsComponent>(combatantEntity);
-                    int dexModifier = (stats.Dexterity - 10) / 2;
+                    // Default dex to 10 if missing
+                    int dex = 10;
+                    if (_world.Has<CoreStatsComponent>(combatantEntity))
+                    {
+                        dex = _world.Get<CoreStatsComponent>(combatantEntity).Dexterity;
+                    }
+
+                    int dexModifier = (dex - 10) / 2;
                     int initiativeRoll = _random.Next(1, 21) + dexModifier;
 
                     // Add the InCombatComponent and set their initiative.
-                    _world.Add(combatantEntity, new InCombatComponent { Initiative = initiativeRoll });
+                    // Note: Arch handles adding components to existing entities gracefully.
+                    if (!_world.Has<InCombatComponent>(combatantEntity))
+                    {
+                        _world.Add(combatantEntity, new InCombatComponent { Initiative = initiativeRoll });
+                    }
+                    else
+                    {
+                        var ic = _world.Get<InCombatComponent>(combatantEntity);
+                        ic.Initiative = initiativeRoll;
+                        _world.Set(combatantEntity, ic);
+                    }
 
-                    var name = _world.Get<NameComponent>(combatantEntity).Name;
+                    // Safety check for Name
+                    string name = "Unknown";
+                    if (_world.Has<NameComponent>(combatantEntity))
+                        name = _world.Get<NameComponent>(combatantEntity).Name;
+
                     Console.WriteLine($"  {name} rolls initiative: {initiativeRoll}");
+                    // NOTIFY PLAYERS
+                    SendMessage(combatantEntity, $"You roll initiative: {initiativeRoll}");
                 }
 
                 // Sort the combatants by initiative, highest first.
+                // Ensure we only sort living, valid combatants
                 var turnOrder = request.Combatants
+                    .Where(c => _world.IsAlive(c) && _world.Has<InCombatComponent>(c))
                     .OrderByDescending(c => _world.Get<InCombatComponent>(c).Initiative)
                     .ToList();
 
@@ -61,14 +87,34 @@ namespace MUD.Rulesets.D20.GameSystems
                 _world.Create(new CombatTurnComponent
                 {
                     TurnOrder = turnOrder,
-                    CurrentTurnIndex = 0
+                    CurrentTurnIndex = 0,
+                    RoundNumber = 1
                 });
 
                 Console.WriteLine("----------------------\n");
-                entitiesToDestroy.Add(entity);
+                // Notify everyone that combat has started
+                foreach (var p in request.Combatants)
+                {
+                    if (_world.IsAlive(p)) SendMessage(p, "Combat has begun!");
+                }
+
+                // Mark this request as handled
+                requestsHandled.Add(entity);
             });
 
-            foreach (var entity in entitiesToDestroy) { _world.Destroy(entity); }
+            // FIX 2: REMOVE the component, DO NOT DESTROY the entity
+            foreach (var entity in requestsHandled)
+            {
+                _world.Remove<StartCombatRequestComponent>(entity);
+            }
+        }
+        private void SendMessage(Entity entity, string message)
+        {
+            if (_world.Has<OutputMessageComponent>(entity))
+            {
+                _world.Get<OutputMessageComponent>(entity).Messages.Add(message);
+            }
+            Console.WriteLine(message);
         }
 
         public void Initialize() { }
