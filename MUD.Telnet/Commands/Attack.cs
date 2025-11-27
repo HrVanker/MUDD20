@@ -1,9 +1,10 @@
 ﻿using System;
-using System.Collections.Generic; // Needed for List<>
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Arch.Core;
 using MUD.Core;
 using MUD.Rulesets.D20.Components;
+using MUD.Rulesets.D20.GameSystems;
 
 namespace MUD.Telnet.Commands
 {
@@ -23,18 +24,15 @@ namespace MUD.Telnet.Commands
             }
 
             string targetName = args[0];
-
-            // 1. Find the target in the same room
             Entity targetEntity = Entity.Null;
-            var playerLocation = world.Get<LocationComponent>(player);
+            var playerLoc = world.Get<LocationComponent>(player);
 
-            // Note: We include VitalsComponent to ensure we only attack living things
+            // 1. Find Target
             var query = new QueryDescription().WithAll<NameComponent, LocationComponent, VitalsComponent>();
-
             world.Query(in query, (Entity entity, ref NameComponent name, ref LocationComponent loc) =>
             {
                 if (entity != player &&
-                    loc.RoomId == playerLocation.RoomId &&
+                    loc.RoomId == playerLoc.RoomId &&
                     name.Name.Contains(targetName, StringComparison.OrdinalIgnoreCase))
                 {
                     targetEntity = entity;
@@ -47,25 +45,41 @@ namespace MUD.Telnet.Commands
                 return;
             }
 
-            // 2. Check if already in combat
+            // 2. Check Distance (Chebyshev: Max(dx, dy))
+            var targetLoc = world.Get<LocationComponent>(targetEntity);
+            int distance = Math.Max(Math.Abs(playerLoc.X - targetLoc.X), Math.Abs(playerLoc.Y - targetLoc.Y));
+
+            if (distance > 1)
+            {
+                // --- TOO FAR: MOVE INSTEAD ---
+                await session.WriteLineAsync($"The {targetName} is too far away ({distance} sq). Moving closer...");
+
+                // Clear any old move requests
+                if (world.Has<MoveToRequestComponent>(player)) world.Remove<MoveToRequestComponent>(player);
+
+                // Add request to move to the target's coordinates
+                world.Add(player, new MoveToRequestComponent
+                {
+                    TargetX = targetLoc.X,
+                    TargetY = targetLoc.Y
+                });
+
+                return; // End command here. Player will move, then they can type 'attack' again.
+            }
+
+            // 3. WITHIN RANGE: ATTACK
             if (world.Has<InCombatComponent>(player))
             {
-                // If already in combat, queue a specific attack action for this turn
-                if (world.Has<AttackActionComponent>(player))
-                    world.Remove<AttackActionComponent>(player);
-
+                // Queue specific action for this turn
+                if (world.Has<AttackActionComponent>(player)) world.Remove<AttackActionComponent>(player);
                 world.Add(player, new AttackActionComponent { Target = targetEntity });
                 await session.WriteLineAsync($"You focus your attack on the {targetName}!");
             }
             else
             {
-                // 3. Start Combat (FIXED)
-                // Your system expects a List<Entity> containing all participants.
+                // Start Combat
                 var combatants = new List<Entity> { player, targetEntity };
-
-                // Attach the request with the correct list
                 world.Add(player, new StartCombatRequestComponent { Combatants = combatants });
-
                 await session.WriteLineAsync($"You prepare to attack the {targetName}! Rolling initiative...");
             }
         }

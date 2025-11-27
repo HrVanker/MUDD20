@@ -58,4 +58,30 @@ namespace MUD.Rulesets.D20.Components
 
         public int RoundNumber;
     }
+
+    // Tracks current gold
+    public struct MoneyComponent
+    {
+        public int Amount;
+    }
+
+    // Tracks religious allegiance (for flavor text)
+    public struct DeityComponent
+    {
+        public string DeityName; // e.g., "Crom", "The Light", "None"
+    }
+
+    // Tracks where the player revives (set this on Rest)
+    public struct RespawnAnchorComponent
+    {
+        public int RoomId;
+        public int X;
+        public int Y;
+    }
+
+    // If they choose to wait, this tracks the time remaining
+    public struct ReviveTimerComponent
+    {
+        public float TimeRemaining; // Seconds
+    }
 }

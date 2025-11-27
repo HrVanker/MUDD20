@@ -18,7 +18,9 @@ namespace MUD.Rulesets.D20.GameSystems
 
         public void Update(in GameTime gameTime)
         {
-            var query = new QueryDescription().WithAll<LocationComponent, MoveToRequestComponent>();
+            var query = new QueryDescription()
+                .WithAll<LocationComponent, MoveToRequestComponent>()
+                .WithNone<UnconsciousComponent, DeadComponent>();
 
             _world.Query(in query, (Entity entity, ref LocationComponent loc, ref MoveToRequestComponent request) =>
             {

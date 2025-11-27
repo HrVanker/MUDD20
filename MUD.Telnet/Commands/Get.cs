@@ -1,13 +1,17 @@
-﻿using Arch.Core;
-using MUD.Rulesets.D20.Components;
-using System;
+﻿using System;
 using System.Threading.Tasks;
+using Arch.Core;
+using MUD.Rulesets.D20.Components;
+using MUD.Rulesets.D20.GameSystems;
 
 public class GetCommand : ICommand
 {
+    public string Name => "get";
+
     public async Task ExecuteAsync(TelnetSession session, World world, string[] args)
     {
         if (!session.PlayerEntity.HasValue) return;
+        var player = session.PlayerEntity.Value;
 
         if (args.Length == 0)
         {
@@ -17,12 +21,12 @@ public class GetCommand : ICommand
 
         string targetName = args[0];
         Entity targetEntity = Entity.Null;
-        var playerLocation = world.Get<LocationComponent>(session.PlayerEntity.Value);
+        var playerLoc = world.Get<LocationComponent>(player);
 
-        // Find an item in the same room with a matching name.
+        // 1. Find Item
         var itemQuery = new QueryDescription().WithAll<ItemComponent, NameComponent, LocationComponent>();
         world.Query(in itemQuery, (Entity entity, ref NameComponent name, ref LocationComponent loc) => {
-            if (loc.RoomId == playerLocation.RoomId && name.Name.Equals(targetName, StringComparison.OrdinalIgnoreCase))
+            if (loc.RoomId == playerLoc.RoomId && name.Name.Contains(targetName, StringComparison.OrdinalIgnoreCase))
             {
                 targetEntity = entity;
             }
@@ -30,12 +34,25 @@ public class GetCommand : ICommand
 
         if (targetEntity != Entity.Null)
         {
-            // Get the player's inventory, add the item, and then update it in the world.
-            var playerInventory = world.Get<InventoryComponent>(session.PlayerEntity.Value);
-            playerInventory.Items.Add(targetEntity);
-            world.Set(session.PlayerEntity.Value, playerInventory);
+            // 2. Check Distance
+            var targetLoc = world.Get<LocationComponent>(targetEntity);
+            int distance = Math.Max(Math.Abs(playerLoc.X - targetLoc.X), Math.Abs(playerLoc.Y - targetLoc.Y));
 
-            // Remove the item from the room.
+            // Allow pickup if 0 (same square) or 1 (adjacent)
+            if (distance > 1)
+            {
+                await session.WriteLineAsync($"The {targetName} is too far. Moving towards it...");
+                if (world.Has<MoveToRequestComponent>(player)) world.Remove<MoveToRequestComponent>(player);
+
+                world.Add(player, new MoveToRequestComponent { TargetX = targetLoc.X, TargetY = targetLoc.Y });
+                return;
+            }
+
+            // 3. Pick Up
+            var playerInventory = world.Get<InventoryComponent>(player);
+            playerInventory.Items.Add(targetEntity);
+            world.Set(player, playerInventory);
+
             world.Remove<LocationComponent>(targetEntity);
             await session.WriteLineAsync($"You take the {targetName}.");
         }

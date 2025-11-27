@@ -1,9 +1,10 @@
-﻿using Arch.Core;
-using MUD.Telnet.Commands;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Arch.Core;
+using MUD.Rulesets.D20.Components;
+using MUD.Telnet.Commands;
 
 public class CommandParser
 {
@@ -36,23 +37,36 @@ public class CommandParser
         };
     }
 
-    public async Task ParseCommand(string input)
+    public async Task ParseCommand(string commandText)
     {
-        if (string.IsNullOrWhiteSpace(input)) return;
+        if (string.IsNullOrWhiteSpace(commandText)) return;
 
-        string[] parts = input.Trim().Split(' ');
-        string commandWord = parts[0].ToLower();
-        string[] args = parts.Skip(1).ToArray();
+        var parts = commandText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var commandName = parts[0];
+        var args = parts.Skip(1).ToArray();
 
-        // Find the command in our dictionary.
-        if (_commands.TryGetValue(commandWord, out ICommand? command))
+        // --- NEW: Status Check ---
+        if (_session.PlayerEntity.HasValue)
         {
-            // If found, execute it.
+            var player = _session.PlayerEntity.Value;
+
+            // If Unconscious, block everything except 'quit'
+            // (Assuming you have a Quit command, if not, they can just disconnect)
+            if (commandName.ToLower() != "quit" && commandName.ToLower() != "wake")
+            {
+                await _session.WriteLineAsync("You are unconscious and cannot act... (Type 'wake' for options)");
+                return;
+            }
+        }
+        // -------------------------
+
+        if (_commands.TryGetValue(commandName, out var command))
+        {
             await command.ExecuteAsync(_session, _world, args);
         }
         else
         {
-            await _session.WriteLineAsync($"Unknown command: {commandWord}");
+            await _session.WriteLineAsync($"Unknown command: {commandName}");
         }
     }
 }

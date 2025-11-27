@@ -310,7 +310,7 @@ namespace MUD.Rulesets.D20
             systems.Add(new SkillCheckSystem(ecsWorld, gameState, diceRoller));
             systems.Add(new InitiativeSystem(ecsWorld, gameState));
             systems.Add(new CombatSystem(ecsWorld, gameState, diceRoller));
-
+            systems.Add(new RecoverySystem(ecsWorld));
             return systems;
         }
     }

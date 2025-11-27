@@ -53,6 +53,9 @@ namespace MUD.Rulesets.D20.GameSystems
                 _world.Add(playerEntity, new InventoryComponent { Items = new List<Entity>() });
                 _world.Add(playerEntity, new EquipmentComponent());
                 _world.Add(playerEntity, new LocationComponent { RoomId = 100, X = 0, Y = 0 });
+                _world.Add(playerEntity, new MoneyComponent { Amount = 50 }); // Start with 50 gold
+                _world.Add(playerEntity, new DeityComponent { DeityName = "Crom" }); // Default deity for testing
+                _world.Add(playerEntity, new RespawnAnchorComponent { RoomId = 1, X = 0, Y = 0 }); // Default to start room
 
                 var stats = ParseComponent<CoreStatsComponent>(baseTemplate, "stats");
                 var raceMods = (TomlTable)raceTemplate["stat_modifiers"];
