@@ -33,7 +33,8 @@ public class CommandParser
             { "get", new GetCommand() },
             { "take", new GetCommand() },
             { "equip", new EquipCommand() },
-            { "wield", new EquipCommand() }
+            { "wield", new EquipCommand() },
+            { "wake", new WakeCommand() }
         };
     }
 
@@ -50,12 +51,14 @@ public class CommandParser
         {
             var player = _session.PlayerEntity.Value;
 
-            // If Unconscious, block everything except 'quit'
-            // (Assuming you have a Quit command, if not, they can just disconnect)
-            if (commandName.ToLower() != "quit" && commandName.ToLower() != "wake")
+            // FIX: Only block commands if the player actually has the UnconsciousComponent
+            if (_world.Has<UnconsciousComponent>(player))
             {
-                await _session.WriteLineAsync("You are unconscious and cannot act... (Type 'wake' for options)");
-                return;
+                if (commandName.ToLower() != "quit" && commandName.ToLower() != "wake")
+                {
+                    await _session.WriteLineAsync("You are unconscious and cannot act... (Type 'wake' for options)");
+                    return;
+                }
             }
         }
         // -------------------------

@@ -13,4 +13,10 @@
     <ProjectReference Include="..\MUD.Server\MUD.Server.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Update="Commands\Wake.cs">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Compile>
+  </ItemGroup>
+
 </Project>

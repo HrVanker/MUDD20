@@ -17,7 +17,7 @@ namespace MUD.Rulesets.D20.GameSystems
 
         public void Update(in GameTime gameTime)
         {
-            var dt = (float)gameTime.Elapsed.TotalSeconds;
+            var dt = gameTime.Elapsed;
 
             // Query specifically for Unconscious people who are Waiting (have a timer)
             var query = new QueryDescription().WithAll<UnconsciousComponent, ReviveTimerComponent, OutputMessageComponent>();
