@@ -19,6 +19,7 @@ namespace MUD.Rulesets.D20
         // The Registry: Maps "goblin_grunt" -> "Content/Aethelgard/creatures/goblin.toml"
         private readonly Dictionary<string, string> _templateRegistry = new Dictionary<string, string>();
         private EntityFactory _entityFactory;
+        public EntityFactory Factory => _entityFactory;
 
         private class RandomDiceRoller : IDiceRoller
         {

@@ -38,7 +38,7 @@ namespace MUD.Rulesets.D20.GameSystems
             return entity;
         }
 
-        private void ApplyTemplate(Entity entity, string templateId)
+        public void ApplyTemplate(Entity entity, string templateId)
         {
             if (!_templateRegistry.ContainsKey(templateId))
             {
@@ -58,9 +58,13 @@ namespace MUD.Rulesets.D20.GameSystems
                 if (model.TryGetValue("stats", out var s) && s is TomlTable stats)
                 {
                     ref var c = ref _world.AddOrGet<CoreStatsComponent>(entity);
-                    if (stats.ContainsKey("strength")) c.Strength = Convert.ToInt32(stats["strength"]);
-                    if (stats.ContainsKey("dexterity")) c.Dexterity = Convert.ToInt32(stats["dexterity"]);
-                    // ... (Add other stats as needed)
+                    // FIX: Use += to allow templates to stack bonuses on top of the base archetype
+                    if (stats.ContainsKey("strength")) c.Strength += Convert.ToInt32(stats["strength"]);
+                    if (stats.ContainsKey("dexterity")) c.Dexterity += Convert.ToInt32(stats["dexterity"]);
+                    if (stats.ContainsKey("constitution")) c.Constitution += Convert.ToInt32(stats["constitution"]);
+                    if (stats.ContainsKey("intelligence")) c.Intelligence += Convert.ToInt32(stats["intelligence"]);
+                    if (stats.ContainsKey("wisdom")) c.Wisdom += Convert.ToInt32(stats["wisdom"]);
+                    if (stats.ContainsKey("charisma")) c.Charisma += Convert.ToInt32(stats["charisma"]);
                 }
 
                 if (model.TryGetValue("vitals", out var v) && v is TomlTable vitals)
@@ -90,6 +94,21 @@ namespace MUD.Rulesets.D20.GameSystems
                     if (armor.ContainsKey("max_dex_bonus")) c.MaxDexBonus = Convert.ToInt32(armor["max_dex_bonus"]);
                     if (armor.ContainsKey("check_penalty")) c.ArmorCheckPenalty = Convert.ToInt32(armor["check_penalty"]);
                     if (armor.ContainsKey("type")) c.ArmorType = armor["type"].ToString();
+                }
+                if (model.TryGetValue("progression", out var prog) && prog is TomlTable progression)
+                {
+                    ref var c = ref _world.AddOrGet<ExperienceComponent>(entity);
+                    if (progression.ContainsKey("level")) c.Level = Convert.ToInt32(progression["level"]);
+                    if (progression.ContainsKey("current_xp")) c.CurrentXP = Convert.ToInt32(progression["current_xp"]);
+                }
+
+                // Also parsing for [xp_reward] on monsters
+                if (model.TryGetValue("combat", out var cbt2) && cbt2 is TomlTable combat2)
+                {
+                    if (combat2.ContainsKey("xp_reward"))
+                    {
+                        _world.AddOrGet<XpRewardComponent>(entity).Amount = Convert.ToInt32(combat2["xp_reward"]);
+                    }
                 }
 
                 // --- Components Tagging ---

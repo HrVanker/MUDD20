@@ -249,6 +249,27 @@ namespace MUD.Rulesets.D20.GameSystems
         {
             Broadcast(combat, $"{targetName} has been defeated!");
 
+            // --- NEW: XP Award Logic ---
+            // 1. Check if the victim has an XP value
+            if (_world.Has<XpRewardComponent>(target))
+            {
+                int xpAmount = _world.Get<XpRewardComponent>(target).Amount;
+
+                // 2. Find the killer (CurrentTurnIndex points to the Attacker)
+                var killer = combat.TurnOrder[combat.CurrentTurnIndex];
+
+                // 3. Award XP if the killer is a Player (has ExperienceComponent)
+                if (_world.IsAlive(killer) && _world.Has<ExperienceComponent>(killer))
+                {
+                    var xp = _world.Get<ExperienceComponent>(killer);
+                    xp.CurrentXP += xpAmount;
+                    _world.Set(killer, xp);
+
+                    SendMessage(killer, $"You gain {xpAmount} experience points! (Total: {xp.CurrentXP}/{xp.NextLevelXP})");
+                }
+            }
+            // ---------------------------
+
             // Check if it's a Player (has Output)
             if (_world.Has<OutputMessageComponent>(target))
             {

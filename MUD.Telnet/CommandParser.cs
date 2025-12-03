@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Arch.Core;
 using MUD.Rulesets.D20.Components;
+using MUD.Rulesets.D20.GameSystems;
 using MUD.Telnet.Commands;
 
 public class CommandParser
@@ -14,14 +15,14 @@ public class CommandParser
     // A dictionary to hold all our command objects.
     private readonly Dictionary<string, ICommand> _commands;
 
-    public CommandParser(TelnetSession session, World world)
+    public CommandParser(TelnetSession session, World world, EntityFactory factory)
     {
         _session = session;
         _world = world;
 
-        // Initialize our commands.
         _commands = new Dictionary<string, ICommand>
         {
+            { "levelup", new LevelUpCommand(factory) },
             { "attack", new Attack() },
             { "a", new Attack() },
             { "move", new MoveCommand() },

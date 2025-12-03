@@ -31,7 +31,8 @@ db.SaveChanges();
 Console.WriteLine("--- Initializing Game World ---");
 var world = World.Create();
 var gameState = new GameState();
-var ruleset = new D20Ruleset();
+D20Ruleset ruleset = new D20Ruleset(); // Change type from IRuleset to D20Ruleset to access property
+ruleset.LoadContent(world, "Content/Aethelgard");
 
 // Load all world content (NPCs, items, etc.)
 ruleset.LoadContent(world, "Content/Aethelgard");
@@ -78,7 +79,7 @@ try
     {
         // AcceptTcpClientAsync will throw an exception when the listener is stopped.
         TcpClient client = await listener.AcceptTcpClientAsync();
-        var session = new TelnetSession(client, world, dbService);
+        var session = new TelnetSession(client, world, dbService, ruleset.Factory);
         _ = Task.Run(session.HandleConnectionAsync);
     }
 }

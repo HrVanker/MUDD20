@@ -10,6 +10,7 @@ dexterity = 15
 [combat]
 natural_armor = 1  # Small size / thick skin
 base_attack_bonus = 1
+xp_reward = 500 #gen test
 
 [vitals]
 max_hp = 6

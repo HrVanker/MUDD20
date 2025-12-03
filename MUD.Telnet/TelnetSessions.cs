@@ -21,12 +21,15 @@ public class TelnetSession
 
     public Entity? PlayerEntity { get; private set; }
 
-    public TelnetSession(TcpClient client, World world, IDatabaseService dbService)
+    private readonly EntityFactory _entityFactory; // Store it
+
+    public TelnetSession(TcpClient client, World world, IDatabaseService dbService, EntityFactory factory)
     {
         _client = client;
         _world = world;
         _dbService = dbService;
-        _parser = new CommandParser(this, _world);
+        _entityFactory = factory; // <--- Store it
+        _parser = new CommandParser(this, _world, _entityFactory); // Pass to parser
     }
 
     public async Task HandleConnectionAsync()
