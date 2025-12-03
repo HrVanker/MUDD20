@@ -28,7 +28,16 @@ namespace MUD.Rulesets.D20.Components
         public int DamageDice { get; set; }
         public int DamageSides { get; set; }
     }
-
+    /// <summary>
+    /// Defines an item as armor or a shield.
+    /// </summary>
+    public struct ArmorComponent
+    {
+        public int ArmorBonus;      // e.g., +4 for Chain Shirt
+        public int MaxDexBonus;     // e.g., +4 (Limits how much Dex helps you)
+        public int ArmorCheckPenalty; // e.g., -2 (Affects physical skills)
+        public string ArmorType;    // "Light", "Medium", "Heavy", "Shield"
+    }
     /// <summary>
     /// A component that defines the "slots" an entity has for equipping items.
     /// The Entity references point to the equipped item entities.

@@ -14,8 +14,10 @@ public class TelnetSession
     private readonly TcpClient _client;
     private readonly World _world;
     private readonly IDatabaseService _dbService;
+    public IDatabaseService DbService => _dbService;
     private readonly CommandParser _parser;
     private StreamWriter? _writer;
+    public ulong AccountId { get; private set; }
 
     public Entity? PlayerEntity { get; private set; }
 
@@ -51,6 +53,7 @@ public class TelnetSession
 
                 if (ulong.TryParse(accountIdInput, out ulong accountId))
                 {
+                    AccountId = accountId;
                     _world.Create(new PlayerLoginRequestComponent { AccountId = accountId });
                     var creationSystem = new CharacterCreationSystem(_world, _dbService);
                     PlayerEntity = creationSystem.Update(new GameTime(0));

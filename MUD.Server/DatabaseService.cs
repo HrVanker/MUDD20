@@ -44,5 +44,24 @@ namespace MUD.Server
                 return db.Players.FirstOrDefault(p => p.AccountId == accountId);
             }
         }
+
+        public void SavePlayerState(ulong accountId, int roomId, int x, int y, int currentHp)
+        {
+            using (var db = new GameDbContext())
+            {
+                var player = db.Players.FirstOrDefault(p => p.AccountId == accountId);
+                if (player != null)
+                {
+                    player.RoomId = roomId;
+                    player.X = x;
+                    player.Y = y;
+                    player.CurrentHP = currentHp;
+                    player.LastLogin = DateTime.UtcNow;
+
+                    db.SaveChanges();
+                    Console.WriteLine($"[Persistence] Saved {player.CharacterName}: Room {roomId} ({x},{y}), HP {currentHp}");
+                }
+            }
+        }
     }
 }

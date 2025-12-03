@@ -48,6 +48,11 @@ namespace MUD.Rulesets.D20.GameSystems
                     return;
                 }
 
+                // 1. Determine Start Location (Save Data vs Default)
+                int startRoom = savedPlayer.RoomId > 0 ? savedPlayer.RoomId : 100;
+                int startX = savedPlayer.RoomId > 0 ? savedPlayer.X : 0;
+                int startY = savedPlayer.RoomId > 0 ? savedPlayer.Y : 0;
+
                 var playerEntity = _world.Create();
                 _world.Add(playerEntity, new NameComponent { Name = savedPlayer.CharacterName });
                 _world.Add(playerEntity, new InventoryComponent { Items = new List<Entity>() });
@@ -55,7 +60,10 @@ namespace MUD.Rulesets.D20.GameSystems
                 _world.Add(playerEntity, new LocationComponent { RoomId = 100, X = 0, Y = 0 });
                 _world.Add(playerEntity, new MoneyComponent { Amount = 50 }); // Start with 50 gold
                 _world.Add(playerEntity, new DeityComponent { DeityName = "Crom" }); // Default deity for testing
-                _world.Add(playerEntity, new RespawnAnchorComponent { RoomId = 1, X = 0, Y = 0 }); // Default to start room
+                _world.Add(playerEntity, new RespawnAnchorComponent { RoomId = 100, X = 0, Y = 0 }); // Default to start room
+                // 2. Set Location and Anchor to the resolved start position
+                _world.Add(playerEntity, new LocationComponent { RoomId = startRoom, X = startX, Y = startY });
+                _world.Add(playerEntity, new RespawnAnchorComponent { RoomId = startRoom, X = startX, Y = startY });
 
                 var stats = ParseComponent<CoreStatsComponent>(baseTemplate, "stats");
                 var raceMods = (TomlTable)raceTemplate["stat_modifiers"];
@@ -70,6 +78,16 @@ namespace MUD.Rulesets.D20.GameSystems
                 _world.Add(playerEntity, ParseComponent<VitalsComponent>(classTemplate, "vitals"));
                 _world.Add(playerEntity, ParseComponent<CombatStatsComponent>(classTemplate, "combat"));
                 _world.Add(playerEntity, ParseComponent<SkillsComponent>(classTemplate, "skills"));
+
+                var vitals = ParseComponent<VitalsComponent>(classTemplate, "vitals");
+
+                // 4. Restore HP if valid, otherwise use Max (New character)
+                if (savedPlayer.CurrentHP > 0)
+                {
+                    vitals.CurrentHP = savedPlayer.CurrentHP;
+                }
+
+                _world.Add(playerEntity, vitals);
 
                 Console.WriteLine($"Successfully created a {savedPlayer.Race} {savedPlayer.Class} named '{savedPlayer.CharacterName}'.");
 
@@ -87,7 +105,7 @@ namespace MUD.Rulesets.D20.GameSystems
         }
 
         // Helper method to load any TOML file
-        private TomlTable LoadTemplate(string filePath)
+        private TomlTable? LoadTemplate(string filePath)
         {
             if (!File.Exists(filePath)) return null;
             return Toml.ToModel(File.ReadAllText(filePath));
@@ -119,6 +137,17 @@ namespace MUD.Rulesets.D20.GameSystems
                 }
                 if (component is CombatStatsComponent c)
                 {
+                    // For Players/Humanoids, this is usually 0 (no natural armor).
+                    // For Monsters, this will be their Natural Armor bonus.
+                    if (tomlTable.ContainsKey("armor_class"))
+                    {
+                        c.NaturalArmor = Convert.ToInt32(tomlTable["armor_class"]);
+                    }
+                    else
+                    {
+                        c.NaturalArmor = 0;
+                    }
+
                     c.BaseAttackBonus = Convert.ToInt32(tomlTable["base_attack_bonus"]);
                     return (T)(object)c;
                 }

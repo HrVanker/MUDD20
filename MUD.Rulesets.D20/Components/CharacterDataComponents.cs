@@ -17,9 +17,8 @@ namespace MUD.Rulesets.D20.Components
     /// </summary>
     public struct CombatStatsComponent
     {
-        public int ArmorClass { get; set; }
-        public int BaseAttackBonus { get; set; }
-        // We can add more here later, like different save types (Fortitude, Reflex, Will)
+        public int NaturalArmor; // Was ArmorClass. Represents skin/fur/scales.
+        public int BaseAttackBonus;
     }
 
     /// <summary>

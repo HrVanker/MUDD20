@@ -117,46 +117,152 @@ namespace MUD.Rulesets.D20.GameSystems
             var attackerName = _world.Get<NameComponent>(attacker).Name;
             var targetName = _world.Get<NameComponent>(target).Name;
 
-            // Stats
-            var bonus = _world.Has<CombatStatsComponent>(attacker) ? _world.Get<CombatStatsComponent>(attacker).BaseAttackBonus : 0;
-            var ac = _world.Has<CombatStatsComponent>(target) ? _world.Get<CombatStatsComponent>(target).ArmorClass : 10;
+            // --- 1. ATTACK ROLL ---
+            int d20 = _diceRoller.Roll(20);
+            int bab = _world.Has<CombatStatsComponent>(attacker) ? _world.Get<CombatStatsComponent>(attacker).BaseAttackBonus : 0;
 
-            int roll = _diceRoller.Roll(20);
-            int total = roll + bonus;
-
-            if (total >= ac)
+            // Calculate Strength Modifier (Melee default)
+            int strMod = 0;
+            if (_world.Has<CoreStatsComponent>(attacker))
             {
-                int damage = _diceRoller.Roll(6);
-                ref var vitals = ref _world.Get<VitalsComponent>(target);
-                vitals.CurrentHP -= damage;
+                var stats = _world.Get<CoreStatsComponent>(attacker);
+                strMod = D20Rules.GetAbilityModifier(stats.Strength);
+            }
 
-                Broadcast(combat, $"{attackerName} hits {targetName} for {damage} damage! ({total} vs AC {ac})");
+            int totalAttack = d20 + bab + strMod;
 
-                if (vitals.CurrentHP <= 0)
+            // --- 2. DEFENSE CALCULATION (Dynamic AC) ---
+            int armorClass = CalculateArmorClass(target);
+
+            // --- 3. RESOLUTION ---
+            // Natural 1 is ALWAYS a MISS
+            if (d20 == 1)
+            {
+                Broadcast(combat, $"{attackerName} attacks {targetName} but fumbles! (Natural 1)");
+                return;
+            }
+
+            // Natural 20 is ALWAYS a HIT (Critical Hit logic can go here later)
+            bool isHit = (d20 == 20) || (totalAttack >= armorClass);
+
+            if (isHit)
+            {
+                // Calculate Damage (Weapon + Str)
+                int damage = CalculateDamage(attacker) + strMod;
+                if (damage < 1) damage = 1; // Minimum 1 damage
+
+                // Apply Damage
+                if (_world.Has<VitalsComponent>(target))
                 {
-                    Broadcast(combat, $"{targetName} has been defeated!");
+                    var vitals = _world.Get<VitalsComponent>(target); // Get Copy
+                    vitals.CurrentHP -= damage;
+                    _world.Set(target, vitals); // Set Back
 
-                    // Check if it's a Player (has Output)
-                    if (_world.Has<OutputMessageComponent>(target))
-                    {
-                        Broadcast(combat, $"{targetName} falls unconscious!");
-                        _world.Remove<InCombatComponent>(target);
+                    Broadcast(combat, $"{attackerName} hits {targetName} for {damage} damage! ({totalAttack} vs AC {armorClass})");
 
-                        // --- NEW: Apply Status Tag ---
-                        if (!_world.Has<UnconsciousComponent>(target))
-                            _world.Add(target, new UnconsciousComponent());
-                    }
-                    else
+                    // Death Check
+                    if (vitals.CurrentHP <= 0)
                     {
-                        // NPCs Die
-                        _world.Remove<InCombatComponent>(target);
-                        _world.Destroy(target);
+                        HandleDeath(target, targetName, ref combat);
                     }
                 }
             }
             else
             {
-                Broadcast(combat, $"{attackerName} attacks {targetName} and misses. ({total} vs AC {ac})");
+                Broadcast(combat, $"{attackerName} attacks {targetName} and misses. ({totalAttack} vs AC {armorClass})");
+            }
+        }
+
+        // --- HELPER: Dynamic AC Calculation ---
+        private int CalculateArmorClass(Entity target)
+        {
+            int baseAC = 10;
+            int armorBonus = 0;
+            int shieldBonus = 0;
+            int dexMod = 0;
+
+            // 1. Get Dexterity
+            if (_world.Has<CoreStatsComponent>(target))
+            {
+                var stats = _world.Get<CoreStatsComponent>(target);
+                dexMod = D20Rules.GetAbilityModifier(stats.Dexterity);
+            }
+
+            // 2. Check Equipment for Armor/Shields
+            if (_world.Has<EquipmentComponent>(target))
+            {
+                var equipment = _world.Get<EquipmentComponent>(target);
+
+                // Check Armor Slot
+                if (_world.IsAlive(equipment.Armor) && _world.Has<ArmorComponent>(equipment.Armor))
+                {
+                    var armor = _world.Get<ArmorComponent>(equipment.Armor);
+                    armorBonus += armor.ArmorBonus;
+
+                    // Cap Dex bonus if wearing armor
+                    if (dexMod > armor.MaxDexBonus) dexMod = armor.MaxDexBonus;
+                }
+
+                // Check OffHand (Shield)
+                if (_world.IsAlive(equipment.OffHand) && _world.Has<ArmorComponent>(equipment.OffHand))
+                {
+                    var shield = _world.Get<ArmorComponent>(equipment.OffHand);
+                    shieldBonus += shield.ArmorBonus;
+                }
+            }
+
+            // 3. Add Natural Armor (from CombatStats if any)
+            // We treat the static 'ArmorClass' in CombatStats as "Natural Armor" or "Monster Base AC" for now.
+            if (_world.Has<CombatStatsComponent>(target))
+            {
+                var combatStats = _world.Get<CombatStatsComponent>(target);
+                baseAC += combatStats.NaturalArmor; // FIX: Use new field name
+            }
+
+            return baseAC + dexMod + armorBonus + shieldBonus;
+        }
+
+        // --- HELPER: Damage Calculation ---
+        private int CalculateDamage(Entity attacker)
+        {
+            // Default Unarmed Damage
+            int damage = 1;
+
+            if (_world.Has<EquipmentComponent>(attacker))
+            {
+                var equip = _world.Get<EquipmentComponent>(attacker);
+                if (_world.IsAlive(equip.MainHand) && _world.Has<WeaponComponent>(equip.MainHand))
+                {
+                    var weapon = _world.Get<WeaponComponent>(equip.MainHand);
+                    damage = _diceRoller.Roll(weapon.DamageSides); // e.g., Roll(8) for Longsword
+                    // Handle XdY (multiple dice) if you add 'DamageDice' count to WeaponComponent
+                    for (int i = 1; i < weapon.DamageDice; i++)
+                    {
+                        damage += _diceRoller.Roll(weapon.DamageSides);
+                    }
+                }
+            }
+            return damage;
+        }
+
+        private void HandleDeath(Entity target, string targetName, ref CombatTurnComponent combat)
+        {
+            Broadcast(combat, $"{targetName} has been defeated!");
+
+            // Check if it's a Player (has Output)
+            if (_world.Has<OutputMessageComponent>(target))
+            {
+                Broadcast(combat, $"{targetName} falls unconscious!");
+                _world.Remove<InCombatComponent>(target);
+
+                if (!_world.Has<UnconsciousComponent>(target))
+                    _world.Add(target, new UnconsciousComponent());
+            }
+            else
+            {
+                // NPCs Die
+                _world.Remove<InCombatComponent>(target);
+                _world.Destroy(target);
             }
         }
 

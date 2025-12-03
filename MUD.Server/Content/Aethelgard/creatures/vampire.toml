@@ -1,0 +1,14 @@
+id = "vampire"
+name = "Vampire Spawn"
+description = "Pale skin and blood-red eyes mark this creature as one of the undead."
+
+[stats]
+strength = 6   # Vampires are super strong (+6)
+dexterity = 4  # And fast (+4)
+
+[combat]
+natural_armor = 6 # Tough skin
+base_attack_bonus = 2
+
+[vitals]
+max_hp = 10 # Undead vitality

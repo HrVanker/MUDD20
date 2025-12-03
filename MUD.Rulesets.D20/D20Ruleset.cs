@@ -18,6 +18,7 @@ namespace MUD.Rulesets.D20
 
         // The Registry: Maps "goblin_grunt" -> "Content/Aethelgard/creatures/goblin.toml"
         private readonly Dictionary<string, string> _templateRegistry = new Dictionary<string, string>();
+        private EntityFactory _entityFactory;
 
         private class RandomDiceRoller : IDiceRoller
         {
@@ -86,6 +87,8 @@ namespace MUD.Rulesets.D20
                         }
                     }
                 }
+
+                _entityFactory = new EntityFactory(ecsWorld, _templateRegistry);
 
                 // 2. LOAD AREAS
                 if (manifest.TryGetValue("area_directories", out var areaDirsObj) && areaDirsObj is TomlArray areaDirs)
@@ -159,6 +162,18 @@ namespace MUD.Rulesets.D20
                     componentsAdded++;
                 }
 
+                if (tomlModel.TryGetValue("armor", out var armorValue) && armorValue is TomlTable armorTable)
+                {
+                    ecsWorld.Add(entity, new ArmorComponent
+                    {
+                        ArmorBonus = Convert.ToInt32(armorTable["armor_bonus"]),
+                        MaxDexBonus = Convert.ToInt32(armorTable["max_dex_bonus"]),
+                        ArmorCheckPenalty = Convert.ToInt32(armorTable["check_penalty"]),
+                        ArmorType = armorTable["type"].ToString()
+                    });
+                    componentsAdded++;
+                }
+
                 if (tomlModel.TryGetValue("stats", out var statsValue) && statsValue is TomlTable statsTable)
                 {
                     ecsWorld.Add(entity, new CoreStatsComponent
@@ -188,7 +203,7 @@ namespace MUD.Rulesets.D20
                 {
                     ecsWorld.Add(entity, new CombatStatsComponent
                     {
-                        ArmorClass = Convert.ToInt32(combatTable["armor_class"]),
+                        NaturalArmor = Convert.ToInt32(combatTable["armor_class"]),
                         BaseAttackBonus = Convert.ToInt32(combatTable["base_attack_bonus"])
                     });
                     componentsAdded++;
@@ -223,14 +238,22 @@ namespace MUD.Rulesets.D20
 
         private void SpawnEntity(World ecsWorld, string templateId, int roomId, int x, int y)
         {
-            if (_templateRegistry.TryGetValue(templateId, out string filePath))
+            // Parsing "goblin_grunt" OR "goblin_grunt+vampire"
+            var templates = new List<string>();
+            string archetype = templateId;
+
+            if (templateId.Contains("+"))
             {
-                LoadEntityFromFile(ecsWorld, filePath, roomId, x, y);
+                var parts = templateId.Split('+');
+                archetype = parts[0];
+                for (int i = 1; i < parts.Length; i++) templates.Add(parts[i]);
             }
-            else
-            {
-                Console.WriteLine($"Error: Room {roomId} tried to spawn unknown template '{templateId}'");
-            }
+
+            // Use the factory to create the entity with all templates applied
+            var entity = _entityFactory.Create(archetype, templates);
+
+            // Set Location (The factory doesn't know about rooms/coordinates)
+            ecsWorld.Add(entity, new LocationComponent { RoomId = roomId, X = x, Y = y });
         }
 
         private void LoadAreaFromFile(World ecsWorld, string filePath)

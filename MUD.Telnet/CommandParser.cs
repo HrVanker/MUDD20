@@ -34,7 +34,9 @@ public class CommandParser
             { "take", new GetCommand() },
             { "equip", new EquipCommand() },
             { "wield", new EquipCommand() },
-            { "wake", new WakeCommand() }
+            { "wake", new WakeCommand() },
+            { "rest", new RestCommand() },
+            { "save", new RestCommand() }
         };
     }
 
