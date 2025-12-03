@@ -76,6 +76,21 @@ namespace MUD.Rulesets.D20.GameSystems
                     if (combat.ContainsKey("natural_armor")) c.NaturalArmor += Convert.ToInt32(combat["natural_armor"]);
                     if (combat.ContainsKey("base_attack_bonus")) c.BaseAttackBonus += Convert.ToInt32(combat["base_attack_bonus"]);
                 }
+                if (model.TryGetValue("weapon", out var w) && w is TomlTable weapon)
+                {
+                    ref var c = ref _world.AddOrGet<WeaponComponent>(entity);
+                    if (weapon.ContainsKey("damage_dice")) c.DamageDice = Convert.ToInt32(weapon["damage_dice"]);
+                    if (weapon.ContainsKey("damage_sides")) c.DamageSides = Convert.ToInt32(weapon["damage_sides"]);
+                }
+
+                if (model.TryGetValue("armor", out var a) && a is TomlTable armor)
+                {
+                    ref var c = ref _world.AddOrGet<ArmorComponent>(entity);
+                    if (armor.ContainsKey("armor_bonus")) c.ArmorBonus = Convert.ToInt32(armor["armor_bonus"]);
+                    if (armor.ContainsKey("max_dex_bonus")) c.MaxDexBonus = Convert.ToInt32(armor["max_dex_bonus"]);
+                    if (armor.ContainsKey("check_penalty")) c.ArmorCheckPenalty = Convert.ToInt32(armor["check_penalty"]);
+                    if (armor.ContainsKey("type")) c.ArmorType = armor["type"].ToString();
+                }
 
                 // --- Components Tagging ---
                 if (model.ContainsKey("item")) _world.AddOrGet<ItemComponent>(entity);

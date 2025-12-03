@@ -45,41 +45,38 @@ public class EquipCommand : ICommand
         // 1. Handle Weapons
         if (world.Has<WeaponComponent>(itemToEquip))
         {
-            // If we already have something, move it back to inventory
-            if (world.IsAlive(equipment.MainHand))
-                inventory.Items.Add(equipment.MainHand);
-
+            if (world.IsAlive(equipment.MainHand)) inventory.Items.Add(equipment.MainHand);
             equipment.MainHand = itemToEquip;
-            equipped = true;
-            await session.WriteLineAsync($"You wield the {world.Get<NameComponent>(itemToEquip).Name}.");
+            inventory.Items.Remove(itemToEquip);
+
+            await session.WriteLineAsync($"You wield the {itemName}.");
+            world.Set(session.PlayerEntity.Value, equipment);
         }
-        // 2. Handle Armor
+        // --- ADD THIS BLOCK ---
         else if (world.Has<ArmorComponent>(itemToEquip))
         {
             var armorComp = world.Get<ArmorComponent>(itemToEquip);
 
             if (armorComp.ArmorType == "Shield")
             {
-                if (world.IsAlive(equipment.OffHand))
-                    inventory.Items.Add(equipment.OffHand);
-
+                if (world.IsAlive(equipment.OffHand)) inventory.Items.Add(equipment.OffHand);
                 equipment.OffHand = itemToEquip;
-                await session.WriteLineAsync($"You strap the {world.Get<NameComponent>(itemToEquip).Name} to your arm.");
+                await session.WriteLineAsync($"You strap the {itemName} to your arm.");
             }
             else
             {
-                if (world.IsAlive(equipment.Armor))
-                    inventory.Items.Add(equipment.Armor);
-
+                if (world.IsAlive(equipment.Armor)) inventory.Items.Add(equipment.Armor);
                 equipment.Armor = itemToEquip;
-                await session.WriteLineAsync($"You wear the {world.Get<NameComponent>(itemToEquip).Name}.");
+                await session.WriteLineAsync($"You wear the {itemName}.");
             }
-            equipped = true;
+
+            inventory.Items.Remove(itemToEquip);
+            world.Set(session.PlayerEntity.Value, equipment);
         }
+        // ----------------------
         else
         {
             await session.WriteLineAsync("You can't equip that.");
-            return;
         }
 
         if (equipped)
